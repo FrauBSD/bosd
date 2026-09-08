@@ -1,0 +1,86 @@
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 Devin Teske
+.\"
+.Dd September 8, 2026
+.Dt BOSD 1
+.Os
+.Sh NAME
+.Nm bosd
+.Nd on-screen display engine
+.Sh SYNOPSIS
+.Nm
+.Op Fl n Ar instance
+.Fl d
+.Nm
+.Op Fl n Ar instance
+.Ar icon
+.Op Ar hold_seconds
+.Sh DESCRIPTION
+.Nm
+paints a PNG glyph, scaled to the internal panel and outlined for
+legibility, in a centered click-through ARGB32 overlay window.
+It is the display engine behind media-key and hotkey feedback: a
+warm daemon owns the window, and clients replace the visible glyph
+in place, so rapid key repeats never flash.
+.Pp
+The options are as follows:
+.Bl -tag -width "-n instance"
+.It Fl d
+Run as the display daemon for
+.Ar instance ,
+listening on a per-user datagram socket.
+.It Fl n Ar instance
+Select the OSD channel (default
+.Dq Li default ) .
+Independent channels own independent windows and sockets.
+.El
+.Pp
+Without
+.Fl d ,
+.Nm
+sends a show request to the running daemon for the channel; if no
+daemon is alive, it paints the glyph itself and exits when
+.Ar hold_seconds
+(default 2.0, clamped to 0.5\(en30) elapse.
+.Sh ICON RESOLUTION
+An
+.Ar icon
+containing a slash is used as a path.
+A bare name is searched in each directory of the colon-separated
+.Ev BOSD_PATH ,
+then in the compiled share directory.
+A
+.Pa .png
+suffix is appended when missing.
+.Sh ENVIRONMENT
+.Bl -tag -width "BOSD_PATH"
+.It Ev BOSD_PATH
+Colon-separated icon search path, tried before the compiled default.
+.It Ev DISPLAY
+X11 display to draw on.
+.El
+.Sh FILES
+.Bl -tag -width "/tmp/bosd.instance.uid.sock" -compact
+.It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .sock
+show-request socket
+.It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .pid
+daemon pid
+.It Pa /usr/local/share/bosd
+default icon directory
+.El
+.Sh EXAMPLES
+Warm the airplane-mode channel at session start:
+.Bd -literal -offset indent
+bosd -n airplane -d &
+.Ed
+.Pp
+Flash the on glyph for 1.5 seconds:
+.Bd -literal -offset indent
+bosd -n airplane airplane-on 1.5
+.Ed
+.Sh SEE ALSO
+.Xr xrandr 1
+.Sh AUTHORS
+.An Devin Teske Aq Mt dteske@FreeBSD.org

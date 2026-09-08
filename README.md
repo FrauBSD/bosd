@@ -1,0 +1,60 @@
+# bosd
+
+On-screen display engine for BSD desktops.
+
+`bosd` paints PNG glyphs — media-key feedback, mode toggles, status
+icons — in a centered, click-through ARGB32 overlay on the internal
+panel. A warm daemon per channel owns the window and replaces the
+visible glyph in place, so rapid toggles never flash. Clients are
+one-line socket sends with a painted fallback when no daemon runs.
+
+Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
+
+## Requirements
+
+- X11 (Xrandr, Xrender, Xext shape), libpng
+- A compositor (e.g. picom) for translucency; opaque without one
+
+## Build / install
+
+```sh
+make
+make install    # PREFIX=/usr/local by default
+make clean
+```
+
+## Usage
+
+```sh
+bosd -n airplane -d &            # warm the channel at session start
+bosd -n airplane airplane-on 1.5 # show a glyph for 1.5 s
+bosd /path/to/glyph.png          # one-shot, absolute path
+```
+
+Bare names resolve through `BOSD_PATH`, then the compiled share
+directory (`share/bosd`). Consumers ship their own glyphs; `bosd`
+ships none.
+
+## Why another OSD?
+
+- **xosd** draws text through shaped windows — the green TV/VCR look.
+  `bosd` composites true-color PNG art with real alpha via XRender.
+- **nbosd** shows battery and CPU frequency; fixed purpose. `bosd`
+  shows whatever glyph you send it; policy lives in the caller.
+- **xob** is a bar; **dunst**/notify-osd are D-Bus notification
+  queues. `bosd` is neither: no bus, no queue, no daemon config —
+  one datagram, one glyph.
+- Libraries (libxosd, libaosd) want a C caller. `bosd` is a shell
+  one-liner, warm-daemon fast: repeated toggles repaint in place,
+  no flash, no respawn.
+- RandR-aware: centered on the primary or internal panel, correct
+  on rotated and multi-head layouts.
+
+## Consumers
+
+Written for [bvwm](https://github.com/FrauBSD/bvwm) and
+[framework-keyboard](https://github.com/FrauBSD/framework-keyboard),
+which install per-feature glyphs and warm their channels from the
+session. Any window manager or script can drive it the same way.
+
+X11-only today; the client protocol is display-agnostic by design.
