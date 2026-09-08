@@ -29,12 +29,15 @@ static GC gc;
 static int scr_depth = 32;
 static int win_x, win_y;
 
+/* XRender ARGB32 is premultiplied; color rides under its alpha. */
 static uint32_t
 pack_argb32(unsigned char r, unsigned char g, unsigned char b,
     unsigned char a)
 {
-	return ((uint32_t)a << 24) | ((uint32_t)r << 16) |
-	    ((uint32_t)g << 8) | (uint32_t)b;
+	return ((uint32_t)a << 24) |
+	    ((uint32_t)(r * a / 255) << 16) |
+	    ((uint32_t)(g * a / 255) << 8) |
+	    (uint32_t)(b * a / 255);
 }
 
 /*

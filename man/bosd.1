@@ -15,7 +15,7 @@
 .Op Fl n Ar instance
 .Fl d
 .Nm
-.Op Fl h
+.Op Fl ho
 .Op Fl n Ar instance
 .Op Fl b Ar badge
 .Op Fl s Ar scale
@@ -50,6 +50,10 @@ Print usage and exit.
 Select the OSD channel (default
 .Dq Li default ) .
 Independent channels own independent windows and sockets.
+.It Fl o
+Skip the black outline normally drawn behind the glyph for
+legibility on any wallpaper.
+Suited to full-color artwork that carries its own contrast.
 .It Fl s Ar scale
 Multiply the panel-derived render size by
 .Ar scale

@@ -31,14 +31,16 @@
 struct icon {
 	struct icon	*next;
 	char		 path[BOSD_SPEC_MAX];
-	unsigned char	*rgba;		/* scaled + outlined */
+	unsigned char	*rgba;		/* scaled, optionally outlined */
 	double		 scale;
+	int		 outline;
 	int		 w, h;
 };
 
 struct show_req {
 	double	 hold;
 	double	 scale;		/* multiplies the panel-derived size */
+	int	 outline;	/* black halo behind the glyph */
 	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
@@ -69,7 +71,7 @@ void	 draw_badge(const struct icon *, const char *text);
 void	 badge_cleanup(void);
 
 /* png.c */
-struct icon	*icon_lookup(const char *spec, double scale);
+struct icon	*icon_lookup(const char *spec, double scale, int outline);
 void		 icon_cache_clear(void);
 
 /* ipc.c */

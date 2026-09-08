@@ -115,7 +115,7 @@ show_cycle(struct show_req *req, int sockfd)
 	struct icon *ic;
 
 	drain_pending_shows(sockfd, req);
-	ic = icon_lookup(req->spec, req->scale);
+	ic = icon_lookup(req->spec, req->scale, req->outline);
 	if (ic == NULL)
 		return;
 	paint_icon(ic, req);
@@ -130,7 +130,7 @@ show_cycle(struct show_req *req, int sockfd)
 		if (!replaced)
 			break;
 		/* Unresolvable replacement: keep the current show up. */
-		next = icon_lookup(req->spec, req->scale);
+		next = icon_lookup(req->spec, req->scale, req->outline);
 		if (next != NULL) {
 			ic = next;
 			paint_icon(ic, req);
@@ -213,7 +213,7 @@ show_once(const struct show_req *req)
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
 
-	ic = icon_lookup(req->spec, req->scale);
+	ic = icon_lookup(req->spec, req->scale, req->outline);
 	if (ic == NULL) {
 		fprintf(stderr, "bosd: cannot load icon '%s'\n", req->spec);
 		return (1);

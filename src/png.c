@@ -201,7 +201,8 @@ pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
 }
 
 static unsigned char *
-prep_icon(const char *path, double scale, int *w_out, int *h_out)
+prep_icon(const char *path, double scale, int outline, int *w_out,
+    int *h_out)
 {
 	unsigned char *src, *scaled, *padded, *outlined;
 	int sw, sh, dw, dh, px, stroke, margin, ow, oh;
@@ -231,6 +232,11 @@ prep_icon(const char *path, double scale, int *w_out, int *h_out)
 	free(scaled);
 	if (padded == NULL)
 		return (NULL);
+	if (!outline) {
+		*w_out = dw + margin * 2;
+		*h_out = dh + margin * 2;
+		return (padded);
+	}
 	outlined = add_outline(padded, dw + margin * 2, dh + margin * 2,
 	    stroke, &ow, &oh);
 	free(padded);
@@ -253,7 +259,7 @@ icon_free(struct icon *ic)
  * head; the list is capped so a chatty session cannot grow unbounded.
  */
 struct icon *
-icon_lookup(const char *spec, double scale)
+icon_lookup(const char *spec, double scale, int outline)
 {
 	struct icon *ic, **pp;
 	char path[BOSD_SPEC_MAX];
@@ -268,7 +274,8 @@ icon_lookup(const char *spec, double scale)
 		scale = BOSD_SCALE_MAX;
 
 	for (pp = &cache_head; (ic = *pp) != NULL; pp = &ic->next) {
-		if (strcmp(ic->path, path) == 0 && ic->scale == scale) {
+		if (strcmp(ic->path, path) == 0 && ic->scale == scale &&
+		    ic->outline == outline) {
 			*pp = ic->next;
 			ic->next = cache_head;
 			cache_head = ic;
@@ -276,7 +283,7 @@ icon_lookup(const char *spec, double scale)
 		}
 	}
 
-	rgba = prep_icon(path, scale, &w, &h);
+	rgba = prep_icon(path, scale, outline, &w, &h);
 	if (rgba == NULL)
 		return (NULL);
 	ic = calloc(1, sizeof(*ic));
@@ -286,6 +293,7 @@ icon_lookup(const char *spec, double scale)
 	}
 	strlcpy(ic->path, path, sizeof(ic->path));
 	ic->scale = scale;
+	ic->outline = outline;
 	ic->rgba = rgba;
 	ic->w = w;
 	ic->h = h;
