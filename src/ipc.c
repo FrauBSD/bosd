@@ -1,10 +1,11 @@
 /*
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
- * Protocol: one datagram per show, "HOLD YOFF SPEC [BADGE]" — HOLD in
- * seconds, YOFF a signed vertical shift in pixels (positive down), SPEC
- * an absolute path or a bare name resolved against BOSD_PATH / the
- * compiled share directory (".png" appended when missing).
+ * Protocol: one datagram per show, "HOLD XOFF YOFF SPEC [BADGE]" —
+ * HOLD in seconds, XOFF/YOFF signed shifts in pixels (positive right/
+ * down), SPEC an absolute path or a bare name resolved against
+ * BOSD_PATH / the compiled share directory (".png" appended when
+ * missing).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,8 +78,9 @@ send_show(const struct show_req *req)
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock_name, sizeof(addr.sun_path));
-	snprintf(msg, sizeof(msg), "%.2f %d %s%s%s", req->hold, req->y_off,
-	    req->spec, req->badge[0] != '\0' ? " " : "", req->badge);
+	snprintf(msg, sizeof(msg), "%.2f %d %d %s%s%s", req->hold,
+	    req->x_off, req->y_off, req->spec,
+	    req->badge[0] != '\0' ? " " : "", req->badge);
 	n = sendto(fd, msg, strlen(msg), MSG_DONTWAIT,
 	    (struct sockaddr *)&addr, sizeof(addr));
 	close(fd);
@@ -91,16 +93,18 @@ parse_show(const char *buf, struct show_req *req)
 	double hold;
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
-	int n, y_off;
+	int n, x_off, y_off;
 
 	badge[0] = '\0';
 	/* Field widths track BOSD_SPEC_MAX / BOSD_BADGE_MAX. */
-	n = sscanf(buf, "%lf %d %1023s %31s", &hold, &y_off, name, badge);
-	if (n < 3)
+	n = sscanf(buf, "%lf %d %d %1023s %31s", &hold, &x_off, &y_off,
+	    name, badge);
+	if (n < 4)
 		return (-1);
 	if (hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
 	req->hold = hold;
+	req->x_off = x_off;
 	req->y_off = y_off;
 	strlcpy(req->spec, name, sizeof(req->spec));
 	strlcpy(req->badge, badge, sizeof(req->badge));

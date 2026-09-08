@@ -223,7 +223,7 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	icon_oy = pad_top;
 	w = ic->w + pad_left + pad_right;
 	h = ic->h + pad_top + pad_bot;
-	x = scr_x + scr_w / 2 - (icon_ox + ic->w / 2);
+	x = scr_x + scr_w / 2 - (icon_ox + ic->w / 2) + req->x_off;
 	y = scr_y + scr_h / 2 - (icon_oy + ic->h / 2) + req->y_off;
 	/* Offset shows are deliberate: only clamp plain centering. */
 	if (req->y_off == 0) {
@@ -238,6 +238,13 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	 * shifting its paint origin, so an offset show emerges from
 	 * the panel edge instead of straying onto a neighbor output.
 	 */
+	if (x < scr_x) {
+		icon_ox -= scr_x - x;
+		w -= scr_x - x;
+		x = scr_x;
+	}
+	if (x + w > scr_x + scr_w)
+		w = scr_x + scr_w - x;
 	if (y < scr_y) {
 		icon_oy -= scr_y - y;
 		h -= scr_y - y;
@@ -245,8 +252,8 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	}
 	if (y + h > scr_y + scr_h)
 		h = scr_y + scr_h - y;
-	if (h <= 0)
-		return (1);	/* fully past the edge: nothing visible */
+	if (w <= 0 || h <= 0)
+		return (1);	/* fully past an edge: nothing visible */
 
 	if (win == 0) {
 		win_w = w;

@@ -35,6 +35,7 @@ struct icon {
 
 struct show_req {
 	double	 hold;
+	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
 	char	 badge[BOSD_BADGE_MAX];

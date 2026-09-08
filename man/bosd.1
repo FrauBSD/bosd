@@ -16,6 +16,7 @@
 .Nm
 .Op Fl n Ar instance
 .Op Fl b Ar badge
+.Op Fl x Ar offset
 .Op Fl y Ar offset
 .Ar icon
 .Op Ar hold_seconds
@@ -44,6 +45,12 @@ listening on a per-user datagram socket.
 Select the OSD channel (default
 .Dq Li default ) .
 Independent channels own independent windows and sockets.
+.It Fl x Ar offset
+Shift the artwork horizontally by
+.Ar offset
+pixels from panel center: positive right, negative left.
+Placement semantics are those of
+.Fl y .
 .It Fl y Ar offset
 Shift the artwork vertically by
 .Ar offset
