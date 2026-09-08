@@ -15,18 +15,27 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-n instance] -d\n"
-	    "       bosd [-n instance] icon [hold_seconds]\n");
+	    "       bosd [-n instance] [-b badge] [-y offset] "
+	    "icon [hold_seconds]\n");
 	exit(1);
 }
 
 int
 main(int argc, char **argv)
 {
-	double hold = BOSD_HOLD_DEF;
+	struct show_req req;
 	int ch, dflag = 0;
 
-	while ((ch = getopt(argc, argv, "dn:")) != -1) {
+	memset(&req, 0, sizeof(req));
+	req.hold = BOSD_HOLD_DEF;
+
+	while ((ch = getopt(argc, argv, "b:dn:y:")) != -1) {
 		switch (ch) {
+		case 'b':
+			if (strlen(optarg) >= sizeof(req.badge))
+				usage();
+			strlcpy(req.badge, optarg, sizeof(req.badge));
+			break;
 		case 'd':
 			dflag = 1;
 			break;
@@ -35,6 +44,9 @@ main(int argc, char **argv)
 			    strchr(optarg, '/') != NULL)
 				usage();
 			strlcpy(instance, optarg, sizeof(instance));
+			break;
+		case 'y':
+			req.y_off = atoi(optarg);
 			break;
 		default:
 			usage();
@@ -46,22 +58,23 @@ main(int argc, char **argv)
 	resolve_ipc_names();
 
 	if (dflag) {
-		if (argc != 0)
+		if (argc != 0 || req.badge[0] != '\0' || req.y_off != 0)
 			usage();
 		return (run_daemon());
 	}
 
 	if (argc < 1 || argc > 2)
 		usage();
+	strlcpy(req.spec, argv[0], sizeof(req.spec));
 	if (argc == 2)
-		hold = atof(argv[1]);
-	if (hold < BOSD_HOLD_MIN)
-		hold = BOSD_HOLD_MIN;
-	if (hold > BOSD_HOLD_MAX)
-		hold = BOSD_HOLD_MAX;
+		req.hold = atof(argv[1]);
+	if (req.hold < BOSD_HOLD_MIN)
+		req.hold = BOSD_HOLD_MIN;
+	if (req.hold > BOSD_HOLD_MAX)
+		req.hold = BOSD_HOLD_MAX;
 
-	if (daemon_alive() && send_show(argv[0], hold) == 0)
+	if (daemon_alive() && send_show(&req) == 0)
 		return (0);
 
-	return (show_once(argv[0], hold));
+	return (show_once(&req));
 }

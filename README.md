@@ -28,6 +28,8 @@ make clean
 ```sh
 bosd -n airplane -d &            # warm the channel at session start
 bosd -n airplane airplane-on 1.5 # show a glyph for 1.5 s
+bosd -n audio -b 2 audio-headphones 1.5 # superscript badge upper-right
+bosd -n audio -y -20 audio-speakers     # shift up 20 px (positive = down)
 bosd /path/to/glyph.png          # one-shot, absolute path
 ```
 

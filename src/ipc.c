@@ -1,9 +1,10 @@
 /*
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
- * Protocol: one datagram per show, "HOLD SPEC" — HOLD in seconds, SPEC an
- * absolute path or a bare name resolved against BOSD_PATH / the compiled
- * share directory (".png" appended when missing).
+ * Protocol: one datagram per show, "HOLD YOFF SPEC [BADGE]" — HOLD in
+ * seconds, YOFF a signed vertical shift in pixels (positive down), SPEC
+ * an absolute path or a bare name resolved against BOSD_PATH / the
+ * compiled share directory (".png" appended when missing).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,7 +63,7 @@ write_pid_file(void)
 }
 
 int
-send_show(const char *spec, double hold_secs)
+send_show(const struct show_req *req)
 {
 	struct sockaddr_un addr;
 	char msg[BOSD_MSG_MAX];
@@ -76,7 +77,8 @@ send_show(const char *spec, double hold_secs)
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock_name, sizeof(addr.sun_path));
-	snprintf(msg, sizeof(msg), "%.2f %s", hold_secs, spec);
+	snprintf(msg, sizeof(msg), "%.2f %d %s%s%s", req->hold, req->y_off,
+	    req->spec, req->badge[0] != '\0' ? " " : "", req->badge);
 	n = sendto(fd, msg, strlen(msg), MSG_DONTWAIT,
 	    (struct sockaddr *)&addr, sizeof(addr));
 	close(fd);
@@ -84,17 +86,24 @@ send_show(const char *spec, double hold_secs)
 }
 
 int
-parse_show(const char *buf, double *hold_secs, char *spec, size_t speclen)
+parse_show(const char *buf, struct show_req *req)
 {
 	double hold;
 	char name[BOSD_SPEC_MAX];
+	char badge[BOSD_BADGE_MAX];
+	int n, y_off;
 
-	if (sscanf(buf, "%lf %1023s", &hold, name) < 2)
+	badge[0] = '\0';
+	/* Field widths track BOSD_SPEC_MAX / BOSD_BADGE_MAX. */
+	n = sscanf(buf, "%lf %d %1023s %31s", &hold, &y_off, name, badge);
+	if (n < 3)
 		return (-1);
 	if (hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
-	*hold_secs = hold;
-	strlcpy(spec, name, speclen);
+	req->hold = hold;
+	req->y_off = y_off;
+	strlcpy(req->spec, name, sizeof(req->spec));
+	strlcpy(req->badge, badge, sizeof(req->badge));
 	return (0);
 }
 

@@ -41,12 +41,10 @@ now_monotonic(void)
 }
 
 static void
-drain_pending_shows(int sockfd, double *hold_secs, char *spec,
-    size_t speclen)
+drain_pending_shows(int sockfd, struct show_req *req)
 {
 	char buf[BOSD_MSG_MAX];
-	double hold;
-	char next[BOSD_SPEC_MAX];
+	struct show_req next;
 	ssize_t n;
 
 	for (;;) {
@@ -54,21 +52,19 @@ drain_pending_shows(int sockfd, double *hold_secs, char *spec,
 		if (n <= 0)
 			break;
 		buf[n] = '\0';
-		if (parse_show(buf, &hold, next, sizeof(next)) != 0)
+		if (parse_show(buf, &next) != 0)
 			continue;
-		*hold_secs = hold;
-		strlcpy(spec, next, speclen);
+		*req = next;
 	}
 }
 
 static int
-wait_or_replace(int sockfd, double deadline, double *hold_secs, char *spec,
-    size_t speclen, const struct icon *cur)
+wait_or_replace(int sockfd, double deadline, struct show_req *req,
+    const struct icon *cur, const struct show_req *shown)
 {
 	struct pollfd pfd;
 	char buf[BOSD_MSG_MAX];
-	double hold;
-	char next[BOSD_SPEC_MAX];
+	struct show_req next;
 	ssize_t n;
 
 	while (!stop && now_monotonic() < deadline) {
@@ -87,7 +83,7 @@ wait_or_replace(int sockfd, double deadline, double *hold_secs, char *spec,
 			XNextEvent(dpy, &ev);
 			if (ev.type == Expose && ev.xexpose.count == 0 &&
 			    mapped && cur != NULL)
-				paint_icon(cur);
+				paint_icon(cur, shown);
 		}
 
 		pfd.fd = sockfd;
@@ -102,11 +98,10 @@ wait_or_replace(int sockfd, double deadline, double *hold_secs, char *spec,
 			break;
 		}
 		buf[n] = '\0';
-		if (parse_show(buf, &hold, next, sizeof(next)) != 0)
+		if (parse_show(buf, &next) != 0)
 			continue;
-		*hold_secs = hold;
-		strlcpy(spec, next, speclen);
-		drain_pending_shows(sockfd, hold_secs, spec, speclen);
+		*req = next;
+		drain_pending_shows(sockfd, req);
 		return (1);
 	}
 
@@ -114,29 +109,32 @@ wait_or_replace(int sockfd, double deadline, double *hold_secs, char *spec,
 }
 
 static void
-show_cycle(char *spec, double hold, int sockfd)
+show_cycle(struct show_req *req, int sockfd)
 {
+	struct show_req shown;
 	struct icon *ic;
 
-	drain_pending_shows(sockfd, &hold, spec, BOSD_SPEC_MAX);
-	ic = icon_lookup(spec);
+	drain_pending_shows(sockfd, req);
+	ic = icon_lookup(req->spec);
 	if (ic == NULL)
 		return;
-	paint_icon(ic);
+	paint_icon(ic, req);
+	shown = *req;
 
 	for (;;) {
 		struct icon *next;
 		int replaced;
 
-		replaced = wait_or_replace(sockfd, now_monotonic() + hold,
-		    &hold, spec, BOSD_SPEC_MAX, ic);
+		replaced = wait_or_replace(sockfd,
+		    now_monotonic() + req->hold, req, ic, &shown);
 		if (!replaced)
 			break;
-		/* Unresolvable replacement: keep the current glyph up. */
-		next = icon_lookup(spec);
+		/* Unresolvable replacement: keep the current show up. */
+		next = icon_lookup(req->spec);
 		if (next != NULL) {
 			ic = next;
-			paint_icon(ic);
+			paint_icon(ic, req);
+			shown = *req;
 		}
 	}
 
@@ -148,8 +146,7 @@ run_daemon(void)
 {
 	struct sockaddr_un addr;
 	char buf[BOSD_MSG_MAX];
-	char spec[BOSD_SPEC_MAX];
-	double hold;
+	struct show_req req;
 
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
@@ -194,41 +191,42 @@ run_daemon(void)
 			break;
 		}
 		buf[n] = '\0';
-		if (parse_show(buf, &hold, spec, sizeof(spec)) != 0)
+		if (parse_show(buf, &req) != 0)
 			continue;
-		show_cycle(spec, hold, sock);
+		show_cycle(&req, sock);
 	}
 
 	return (0);
 }
 
 int
-show_once(const char *spec, double hold_secs)
+show_once(const struct show_req *req)
 {
 	struct icon *ic;
-	double deadline;
+	double deadline, hold;
 
-	if (hold_secs <= 0.0)
-		hold_secs = BOSD_HOLD_DEF;
+	hold = req->hold;
+	if (hold <= 0.0)
+		hold = BOSD_HOLD_DEF;
 	if (init_display() != 0)
 		return (1);
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
 
-	ic = icon_lookup(spec);
+	ic = icon_lookup(req->spec);
 	if (ic == NULL) {
-		fprintf(stderr, "bosd: cannot load icon '%s'\n", spec);
+		fprintf(stderr, "bosd: cannot load icon '%s'\n", req->spec);
 		return (1);
 	}
-	paint_icon(ic);
+	paint_icon(ic, req);
 
-	deadline = now_monotonic() + hold_secs;
+	deadline = now_monotonic() + hold;
 	while (now_monotonic() < deadline) {
 		while (XPending(dpy) > 0) {
 			XEvent ev;
 			XNextEvent(dpy, &ev);
 			if (ev.type == Expose && ev.xexpose.count == 0)
-				paint_icon(ic);
+				paint_icon(ic, req);
 		}
 		poll(NULL, 0, 50);
 	}

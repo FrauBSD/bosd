@@ -15,6 +15,8 @@
 .Fl d
 .Nm
 .Op Fl n Ar instance
+.Op Fl b Ar badge
+.Op Fl y Ar offset
 .Ar icon
 .Op Ar hold_seconds
 .Sh DESCRIPTION
@@ -27,6 +29,13 @@ in place, so rapid key repeats never flash.
 .Pp
 The options are as follows:
 .Bl -tag -width "-n instance"
+.It Fl b Ar badge
+Draw
+.Ar badge
+as a superscript at the glyph's upper right \(em white with a black
+outline, about a quarter of the glyph height.
+Used for index digits and short labels
+.Pq e.g. a headphone number, Dq All .
 .It Fl d
 Run as the display daemon for
 .Ar instance ,
@@ -35,6 +44,15 @@ listening on a per-user datagram socket.
 Select the OSD channel (default
 .Dq Li default ) .
 Independent channels own independent windows and sockets.
+.It Fl y Ar offset
+Shift the artwork vertically by
+.Ar offset
+pixels from panel center: positive down, negative up
+.Pq X11 coordinate sense .
+Consumers sharing a screen with fixed chrome (e.g. a taskbar) can
+recenter within the remaining space, such as
+.Fl y Li -20
+above a 40-pixel bottom bar.
 .El
 .Pp
 Without
@@ -79,6 +97,11 @@ bosd -n airplane -d &
 Flash the on glyph for 1.5 seconds:
 .Bd -literal -offset indent
 bosd -n airplane airplane-on 1.5
+.Ed
+.Pp
+Show the second headphone output:
+.Bd -literal -offset indent
+bosd -n audio -b 2 audio-headphones 1.5
 .Ed
 .Sh SEE ALSO
 .Xr xrandr 1

@@ -18,12 +18,13 @@
 Display	*dpy;
 Window	 win;
 int	 scr_x, scr_y, scr_w, scr_h;
-int	 icon_px = 200;
+int	 icon_px = 200, icon_pad;
 int	 mapped;
 int	 win_w, win_h;
+int	 icon_ox, icon_oy;	/* artwork origin within the window */
+Visual	*visual;
+Colormap cmap;
 
-static Colormap cmap;
-static Visual *visual;
 static GC gc;
 static int scr_depth = 32;
 
@@ -100,6 +101,11 @@ refresh_screen_geom(void)
 		icon_px = 320;
 	if (icon_px < 160)
 		icon_px = 160;
+	icon_pad = icon_px / 22;
+	if (icon_pad < 12)
+		icon_pad = 12;
+	if (icon_pad > 24)
+		icon_pad = 24;
 }
 
 static Visual *
@@ -139,11 +145,11 @@ apply_shape(void)
 }
 
 static int
-init_window(int w, int h)
+create_window(int x, int y)
 {
 	XSetWindowAttributes wa;
 	Atom net_wm_state, states[3];
-	int screen, x, y;
+	int screen;
 
 	visual = find_argb_visual(&scr_depth);
 	if (visual == NULL)
@@ -157,10 +163,6 @@ init_window(int w, int h)
 	wa.override_redirect = True;
 	wa.event_mask = ExposureMask;
 
-	win_w = w;
-	win_h = h;
-	x = scr_x + (scr_w - win_w) / 2;
-	y = scr_y + (scr_h - win_h) / 2;
 	win = XCreateWindow(dpy, RootWindow(dpy, screen), x, y, win_w, win_h,
 	    0, scr_depth, InputOutput, visual,
 	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect |
@@ -181,15 +183,64 @@ init_window(int w, int h)
 	return (0);
 }
 
-static void
-resize_window(int w, int h)
+/*
+ * Size the window as artwork plus padding — extra top/right room when a
+ * badge rides along (more for a wide label) — and place it so the
+ * artwork, not the window, is centered on the panel, shifted by the
+ * requested vertical offset (positive down).
+ */
+static int
+layout_window(const struct icon *ic, const struct show_req *req)
 {
-	win_w = w;
-	win_h = h;
-	XMoveResizeWindow(dpy, win,
-	    scr_x + (scr_w - win_w) / 2, scr_y + (scr_h - win_h) / 2,
-	    (unsigned)win_w, (unsigned)win_h);
-	apply_shape();
+	int pad_left, pad_right, pad_top, pad_bot;
+	int blen, w, h, x, y;
+
+	blen = (int)strlen(req->badge);
+	pad_left = icon_px / 12;
+	pad_bot = icon_px / 12;
+	if (blen > 1) {
+		pad_right = (ic->h * 42) / 100;
+		if (pad_right < 88)
+			pad_right = 88;
+		pad_top = (ic->h * 18) / 100;
+		if (pad_top < 48)
+			pad_top = 48;
+	} else if (blen == 1) {
+		pad_right = (ic->h * 20) / 100;
+		if (pad_right < 48)
+			pad_right = 48;
+		pad_top = (ic->h * 15) / 100;
+		if (pad_top < 41)
+			pad_top = 41;
+	} else {
+		pad_right = icon_px / 12;
+		pad_top = icon_px / 12;
+	}
+
+	icon_ox = pad_left;
+	icon_oy = pad_top;
+	w = ic->w + pad_left + pad_right;
+	h = ic->h + pad_top + pad_bot;
+	x = scr_x + scr_w / 2 - (icon_ox + ic->w / 2);
+	y = scr_y + scr_h / 2 - (icon_oy + ic->h / 2) + req->y_off;
+	if (h < scr_h && y + h > scr_y + scr_h)
+		y = scr_y + scr_h - h;
+	if (y < scr_y)
+		y = scr_y;
+
+	if (win == 0) {
+		win_w = w;
+		win_h = h;
+		return (create_window(x, y));
+	}
+	if (w != win_w || h != win_h) {
+		win_w = w;
+		win_h = h;
+		XMoveResizeWindow(dpy, win, x, y, (unsigned)win_w,
+		    (unsigned)win_h);
+		apply_shape();
+	}
+	return (0);
 }
 
 static void
@@ -237,8 +288,8 @@ paint_rgba(const unsigned char *rgba, int iw, int ih)
 	clear.red = clear.green = clear.blue = clear.alpha = 0;
 	XRenderFillRectangle(dpy, PictOpSrc, dst, &clear, 0, 0, win_w,
 	    win_h);
-	XRenderComposite(dpy, PictOpOver, src, None, dst, 0, 0, 0, 0, 0, 0,
-	    iw, ih);
+	XRenderComposite(dpy, PictOpOver, src, None, dst, 0, 0, 0, 0,
+	    icon_ox, icon_oy, iw, ih);
 	XRenderFreePicture(dpy, src);
 	XRenderFreePicture(dpy, dst);
 	XFreePixmap(dpy, pix);
@@ -250,14 +301,10 @@ paint_rgba(const unsigned char *rgba, int iw, int ih)
  * kill/respawn) flashes between glyphs.
  */
 void
-paint_icon(const struct icon *ic)
+paint_icon(const struct icon *ic, const struct show_req *req)
 {
-	if (win == 0) {
-		if (init_window(ic->w, ic->h) != 0)
-			return;
-	} else if (ic->w != win_w || ic->h != win_h) {
-		resize_window(ic->w, ic->h);
-	}
+	if (layout_window(ic, req) != 0)
+		return;
 
 	if (!mapped) {
 		XMapRaised(dpy, win);
@@ -268,6 +315,7 @@ paint_icon(const struct icon *ic)
 	}
 	XClearWindow(dpy, win);
 	paint_rgba(ic->rgba, ic->w, ic->h);
+	draw_badge(ic, req->badge);
 	XSync(dpy, False);
 }
 
@@ -303,6 +351,7 @@ init_display(void)
 void
 x11_cleanup(void)
 {
+	badge_cleanup();
 	if (dpy != NULL && gc != None) {
 		XFreeGC(dpy, gc);
 		gc = None;

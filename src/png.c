@@ -182,11 +182,29 @@ add_outline(const unsigned char *src, int w, int h, int stroke,
 	return (out);
 }
 
+/* Transparent margin around the artwork (badge headroom, halo air). */
+static unsigned char *
+pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
+{
+	unsigned char *dst;
+	int pw, ph, y;
+
+	pw = w + margin * 2;
+	ph = h + margin * 2;
+	dst = calloc((size_t)pw * (size_t)ph, 4);
+	if (dst == NULL)
+		return (NULL);
+	for (y = 0; y < h; y++)
+		memcpy(dst + (((size_t)(y + margin) * pw) + margin) * 4,
+		    src + (size_t)y * w * 4, (size_t)w * 4);
+	return (dst);
+}
+
 static unsigned char *
 prep_icon(const char *path, int *w_out, int *h_out)
 {
-	unsigned char *src, *scaled, *outlined;
-	int sw, sh, dw, dh, stroke, ow, oh;
+	unsigned char *src, *scaled, *padded, *outlined;
+	int sw, sh, dw, dh, stroke, margin, ow, oh;
 
 	src = load_png_rgba(path, &sw, &sh);
 	if (src == NULL)
@@ -205,8 +223,14 @@ prep_icon(const char *path, int *w_out, int *h_out)
 		stroke = 5;
 	if (stroke > 13)
 		stroke = 13;
-	outlined = add_outline(scaled, dw, dh, stroke, &ow, &oh);
+	margin = icon_pad + stroke + 6;
+	padded = pad_icon_rgba(scaled, dw, dh, margin);
 	free(scaled);
+	if (padded == NULL)
+		return (NULL);
+	outlined = add_outline(padded, dw + margin * 2, dh + margin * 2,
+	    stroke, &ow, &oh);
+	free(padded);
 	if (outlined == NULL)
 		return (NULL);
 	*w_out = ow;
