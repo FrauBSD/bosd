@@ -14,9 +14,10 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-	    "Usage: bosd [-n instance] -d\n"
-	    "       bosd [-n instance] [-b badge] [-s scale] [-x offset] "
-	    "[-y offset] icon [hold_seconds]\n");
+	    "Usage: bosd [-h] [-n instance] -d\n"
+	    "       bosd [-h] [-n instance] [-b badge] [-s scale] "
+	    "[-x offset] [-y offset] \\\n"
+	    "            icon [hold_seconds]\n");
 	exit(1);
 }
 
