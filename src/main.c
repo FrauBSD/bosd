@@ -29,7 +29,7 @@ main(int argc, char **argv)
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
 
-	while ((ch = getopt(argc, argv, "b:dn:x:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:dhn:x:y:")) != -1) {
 		switch (ch) {
 		case 'b':
 			if (strlen(optarg) >= sizeof(req.badge))
