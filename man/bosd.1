@@ -16,6 +16,7 @@
 .Nm
 .Op Fl n Ar instance
 .Op Fl b Ar badge
+.Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
 .Ar icon
@@ -47,6 +48,14 @@ Print usage and exit.
 Select the OSD channel (default
 .Dq Li default ) .
 Independent channels own independent windows and sockets.
+.It Fl s Ar scale
+Multiply the panel-derived render size by
+.Ar scale
+(0.1 to 8.0, default 1.0).
+The glyph is normally sized from the panel height, independent of
+the PNG's native resolution;
+.Fl s Li 2.0
+renders it twice that size.
 .It Fl x Ar offset
 Shift the artwork horizontally by
 .Ar offset

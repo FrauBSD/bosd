@@ -201,16 +201,19 @@ pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
 }
 
 static unsigned char *
-prep_icon(const char *path, int *w_out, int *h_out)
+prep_icon(const char *path, double scale, int *w_out, int *h_out)
 {
 	unsigned char *src, *scaled, *padded, *outlined;
-	int sw, sh, dw, dh, stroke, margin, ow, oh;
+	int sw, sh, dw, dh, px, stroke, margin, ow, oh;
 
 	src = load_png_rgba(path, &sw, &sh);
 	if (src == NULL)
 		return (NULL);
-	dh = icon_px;
-	dw = (int)((long)icon_px * (long)sw / (long)sh);
+	px = (int)((double)icon_px * scale + 0.5);
+	if (px < 8)
+		px = 8;
+	dh = px;
+	dw = (int)((long)px * (long)sw / (long)sh);
 	if (dw < 1)
 		dw = 1;
 	scaled = scale_rgba(src, sw, sh, dw, dh);
@@ -218,7 +221,7 @@ prep_icon(const char *path, int *w_out, int *h_out)
 	if (scaled == NULL)
 		return (NULL);
 
-	stroke = icon_px / 25;
+	stroke = px / 25;
 	if (stroke < 5)
 		stroke = 5;
 	if (stroke > 13)
@@ -250,7 +253,7 @@ icon_free(struct icon *ic)
  * head; the list is capped so a chatty session cannot grow unbounded.
  */
 struct icon *
-icon_lookup(const char *spec)
+icon_lookup(const char *spec, double scale)
 {
 	struct icon *ic, **pp;
 	char path[BOSD_SPEC_MAX];
@@ -259,9 +262,13 @@ icon_lookup(const char *spec)
 
 	if (icon_resolve(spec, path, sizeof(path)) != 0)
 		return (NULL);
+	if (scale < BOSD_SCALE_MIN)
+		scale = BOSD_SCALE_MIN;
+	if (scale > BOSD_SCALE_MAX)
+		scale = BOSD_SCALE_MAX;
 
 	for (pp = &cache_head; (ic = *pp) != NULL; pp = &ic->next) {
-		if (strcmp(ic->path, path) == 0) {
+		if (strcmp(ic->path, path) == 0 && ic->scale == scale) {
 			*pp = ic->next;
 			ic->next = cache_head;
 			cache_head = ic;
@@ -269,7 +276,7 @@ icon_lookup(const char *spec)
 		}
 	}
 
-	rgba = prep_icon(path, &w, &h);
+	rgba = prep_icon(path, scale, &w, &h);
 	if (rgba == NULL)
 		return (NULL);
 	ic = calloc(1, sizeof(*ic));
@@ -278,6 +285,7 @@ icon_lookup(const char *spec)
 		return (NULL);
 	}
 	strlcpy(ic->path, path, sizeof(ic->path));
+	ic->scale = scale;
 	ic->rgba = rgba;
 	ic->w = w;
 	ic->h = h;

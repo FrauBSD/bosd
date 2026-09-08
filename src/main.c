@@ -15,8 +15,8 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-n instance] -d\n"
-	    "       bosd [-n instance] [-b badge] [-x offset] [-y offset] "
-	    "icon [hold_seconds]\n");
+	    "       bosd [-n instance] [-b badge] [-s scale] [-x offset] "
+	    "[-y offset] icon [hold_seconds]\n");
 	exit(1);
 }
 
@@ -28,8 +28,9 @@ main(int argc, char **argv)
 
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
+	req.scale = 1.0;
 
-	while ((ch = getopt(argc, argv, "b:dhn:x:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:dhn:s:x:y:")) != -1) {
 		switch (ch) {
 		case 'b':
 			if (strlen(optarg) >= sizeof(req.badge))
@@ -44,6 +45,16 @@ main(int argc, char **argv)
 			    strchr(optarg, '/') != NULL)
 				usage();
 			strlcpy(instance, optarg, sizeof(instance));
+			break;
+		case 's':
+			req.scale = atof(optarg);
+			if (req.scale < BOSD_SCALE_MIN ||
+			    req.scale > BOSD_SCALE_MAX) {
+				fprintf(stderr, "bosd: -s scale must be "
+				    "%.1f to %.1f\n", BOSD_SCALE_MIN,
+				    BOSD_SCALE_MAX);
+				usage();
+			}
 			break;
 		case 'x':
 			req.x_off = atoi(optarg);
@@ -61,8 +72,8 @@ main(int argc, char **argv)
 	resolve_ipc_names();
 
 	if (dflag) {
-		if (argc != 0 || req.badge[0] != '\0' || req.x_off != 0 ||
-		    req.y_off != 0)
+		if (argc != 0 || req.badge[0] != '\0' || req.scale != 1.0 ||
+		    req.x_off != 0 || req.y_off != 0)
 			usage();
 		return (run_daemon());
 	}

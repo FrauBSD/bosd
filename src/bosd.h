@@ -21,6 +21,8 @@
 #define BOSD_HOLD_DEF	2.0
 #define BOSD_HOLD_MIN	0.5
 #define BOSD_HOLD_MAX	30.0
+#define BOSD_SCALE_MIN	0.1
+#define BOSD_SCALE_MAX	8.0
 
 #ifndef BOSD_ICONDIR
 #define BOSD_ICONDIR	"/usr/local/share/bosd"
@@ -30,11 +32,13 @@ struct icon {
 	struct icon	*next;
 	char		 path[BOSD_SPEC_MAX];
 	unsigned char	*rgba;		/* scaled + outlined */
+	double		 scale;
 	int		 w, h;
 };
 
 struct show_req {
 	double	 hold;
+	double	 scale;		/* multiplies the panel-derived size */
 	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
@@ -65,7 +69,7 @@ void	 draw_badge(const struct icon *, const char *text);
 void	 badge_cleanup(void);
 
 /* png.c */
-struct icon	*icon_lookup(const char *spec);
+struct icon	*icon_lookup(const char *spec, double scale);
 void		 icon_cache_clear(void);
 
 /* ipc.c */
