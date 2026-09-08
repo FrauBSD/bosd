@@ -27,6 +27,7 @@ Colormap cmap;
 
 static GC gc;
 static int scr_depth = 32;
+static int win_x, win_y;
 
 static uint32_t
 pack_argb32(unsigned char r, unsigned char g, unsigned char b,
@@ -187,7 +188,8 @@ create_window(int x, int y)
  * Size the window as artwork plus padding — extra top/right room when a
  * badge rides along (more for a wide label) — and place it so the
  * artwork, not the window, is centered on the panel, shifted by the
- * requested vertical offset (positive down).
+ * requested vertical offset (positive down).  Returns 1 when the show
+ * lies entirely past a panel edge (nothing to paint).
  */
 static int
 layout_window(const struct icon *ic, const struct show_req *req)
@@ -223,22 +225,48 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	h = ic->h + pad_top + pad_bot;
 	x = scr_x + scr_w / 2 - (icon_ox + ic->w / 2);
 	y = scr_y + scr_h / 2 - (icon_oy + ic->h / 2) + req->y_off;
-	if (h < scr_h && y + h > scr_y + scr_h)
-		y = scr_y + scr_h - h;
-	if (y < scr_y)
+	/* Offset shows are deliberate: only clamp plain centering. */
+	if (req->y_off == 0) {
+		if (h < scr_h && y + h > scr_y + scr_h)
+			y = scr_y + scr_h - h;
+		if (y < scr_y)
+			y = scr_y;
+	}
+
+	/*
+	 * Confine the window to the panel and clip the artwork by
+	 * shifting its paint origin, so an offset show emerges from
+	 * the panel edge instead of straying onto a neighbor output.
+	 */
+	if (y < scr_y) {
+		icon_oy -= scr_y - y;
+		h -= scr_y - y;
 		y = scr_y;
+	}
+	if (y + h > scr_y + scr_h)
+		h = scr_y + scr_h - y;
+	if (h <= 0)
+		return (1);	/* fully past the edge: nothing visible */
 
 	if (win == 0) {
 		win_w = w;
 		win_h = h;
+		win_x = x;
+		win_y = y;
 		return (create_window(x, y));
 	}
 	if (w != win_w || h != win_h) {
 		win_w = w;
 		win_h = h;
+		win_x = x;
+		win_y = y;
 		XMoveResizeWindow(dpy, win, x, y, (unsigned)win_w,
 		    (unsigned)win_h);
 		apply_shape();
+	} else if (x != win_x || y != win_y) {
+		win_x = x;
+		win_y = y;
+		XMoveWindow(dpy, win, x, y);
 	}
 	return (0);
 }
@@ -303,8 +331,15 @@ paint_rgba(const unsigned char *rgba, int iw, int ih)
 void
 paint_icon(const struct icon *ic, const struct show_req *req)
 {
-	if (layout_window(ic, req) != 0)
+	int vis;
+
+	vis = layout_window(ic, req);
+	if (vis < 0)
 		return;
+	if (vis > 0) {
+		hide_overlay();
+		return;
+	}
 
 	if (!mapped) {
 		XMapRaised(dpy, win);

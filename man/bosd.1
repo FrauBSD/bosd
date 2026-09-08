@@ -53,6 +53,10 @@ Consumers sharing a screen with fixed chrome (e.g. a taskbar) can
 recenter within the remaining space, such as
 .Fl y Li -20
 above a 40-pixel bottom bar.
+Offset placement is exact; artwork carried past a panel edge is
+clipped at the edge rather than shown on a neighboring output,
+so a large offset slides a show in from beyond it.
+Only offset-free shows are clamped to remain fully visible.
 .El
 .Pp
 Without
