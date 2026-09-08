@@ -52,6 +52,23 @@ ships none.
 - RandR-aware: centered on the primary or internal panel, correct
   on rotated and multi-head layouts.
 
+## Authoring glyphs
+
+`tools/glyph.py` (stdlib-only Python) is the shared rasterizer for
+icon-build scripts: an RGBA canvas with optional supersampling, an
+antialiased disc brush, stroke and fill primitives, and a PNG
+encoder. Art scripts import it and keep only their geometry.
+
+```python
+from glyph import Canvas
+c = Canvas(512, 512, ss=2)
+c.circle(256, 256, 200, 16)
+c.line(120, 120, 392, 392, 18)
+c.write("share/bosd/my-glyph.png")
+```
+
+`python3 tools/glyph.py out.png` draws a primitive sampler.
+
 ## Consumers
 
 Written for [bvwm](https://github.com/FrauBSD/bvwm) and

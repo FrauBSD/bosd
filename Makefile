@@ -40,5 +40,6 @@ install: all
 
 clean:
 	rm -f ${PROG} ${OBJS}
+	rm -rf tools/__pycache__
 
 .PHONY: all install clean
