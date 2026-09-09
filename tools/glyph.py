@@ -1,3 +1,5 @@
+############################################################ DOCSTRING
+
 """Vector-glyph rasterizer for bosd icon builders.
 
 One canonical home for the drawing plumbing every `*-icons-build`
@@ -11,6 +13,8 @@ Coordinates are logical canvas units regardless of supersampling.
 Stdlib only.
 """
 
+############################################################ INCLUDES
+
 from __future__ import annotations
 
 import math
@@ -18,8 +22,11 @@ import struct
 import zlib
 from pathlib import Path
 
+############################################################ GLOBALS
+
 WHITE = (255, 255, 255, 255)
 
+############################################################ FUNCTIONS
 
 # -- path geometry (feeds Canvas.fill_path) --------------------------------
 
@@ -80,6 +87,32 @@ def outline(path, width, caps="butt"):
 	return (left + cap(path[-1], path[-2]) + right[::-1] +
 	    cap(path[0], path[1]))
 
+
+def emit(canvas, name, dirs):
+	"""Write canvas as name into each dir; skip unwritable ones."""
+	written = []
+	for d in dirs:
+		try:
+			path = Path(d) / name
+			canvas.write(path)
+			written.append(path)
+		except OSError:
+			pass
+	return written
+
+
+def _demo(path):
+	"""Exercise the primitives: circle, slash, poly, roundrect, punch."""
+	c = Canvas(512, 512, ss=2)
+	c.circle(256, 256, 200, 16)
+	c.fill_poly(((256, 120), (352, 320), (160, 320)))
+	c.punch(256, 280, 40)
+	c.roundrect(96, 400, 320, 72, 24, 10)
+	c.line(120, 120, 392, 392, 18)
+	c.write(path)
+
+
+############################################################ CLASSES
 
 class Canvas:
 	"""RGBA canvas; ss > 1 renders at ss x and box-filters down."""
@@ -372,30 +405,12 @@ class Canvas:
 		path.write_bytes(png)
 
 
-def emit(canvas, name, dirs):
-	"""Write canvas as name into each dir; skip unwritable ones."""
-	written = []
-	for d in dirs:
-		try:
-			path = Path(d) / name
-			canvas.write(path)
-			written.append(path)
-		except OSError:
-			pass
-	return written
-
-
-def _demo(path):
-	"""Exercise the primitives: circle, slash, poly, roundrect, punch."""
-	c = Canvas(512, 512, ss=2)
-	c.circle(256, 256, 200, 16)
-	c.fill_poly(((256, 120), (352, 320), (160, 320)))
-	c.punch(256, 280, 40)
-	c.roundrect(96, 400, 320, 72, 24, 10)
-	c.line(120, 120, 392, 392, 18)
-	c.write(path)
-
+############################################################ MAIN
 
 if __name__ == "__main__":
 	import sys
 	_demo(sys.argv[1] if len(sys.argv) > 1 else "/tmp/glyph-demo.png")
+
+################################################################################
+# END
+################################################################################
