@@ -13,7 +13,7 @@
 .Nm
 .Op Fl h
 .Op Fl n Ar instance
-.Fl d
+.Bro Fl d | Fl C Brc
 .Nm
 .Op Fl ho
 .Op Fl n Ar instance
@@ -21,7 +21,7 @@
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
-.Ar icon
+.Bro Ar icon | Fl c Ar countdown Brc
 .Op Ar hold_seconds
 .Sh DESCRIPTION
 .Nm
@@ -40,6 +40,30 @@ as a superscript at the glyph's upper right \(em white with a black
 outline, about a quarter of the glyph height.
 Used for index digits and short labels
 .Pq e.g. a headphone number, Dq All .
+At most 31 characters; whitespace is not permitted.
+.It Fl C
+Clear the channel's active render \(em hide an in-progress show,
+such as a long countdown \(em and return immediately.
+Without a running daemon there is nothing to clear.
+.It Fl c Ar countdown
+Count down from
+.Ar countdown
+to 1 in huge outlined digits on a full-panel overlay, one second
+per digit
+.Pq Ar hold_seconds overrides ,
+then exit \(em the screenshot timer.
+Replaces
+.Ar icon
+and is dispatched to the channel daemon like any show, replacing
+whatever it displays (and vice versa); without a daemon the
+invoking process draws it and returns when done.
+Honors
+.Fl b , o , s , x ,
+and
+.Fl y :
+the badge rides the digits' upper right and
+.Fl s
+scales the digits.
 .It Fl d
 Run as the display daemon for
 .Ar instance ,
@@ -89,7 +113,7 @@ Without
 sends a show request to the running daemon for the channel; if no
 daemon is alive, it paints the glyph itself and exits when
 .Ar hold_seconds
-(default 2.0, clamped to 0.5\(en30) elapse.
+(default 2.0, clamped to 0.01\(en30) elapse.
 .Sh ICON RESOLUTION
 An
 .Ar icon

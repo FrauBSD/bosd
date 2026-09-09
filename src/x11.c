@@ -112,7 +112,7 @@ refresh_screen_geom(void)
 		icon_pad = 24;
 }
 
-static Visual *
+Visual *
 find_argb_visual(int *depth_out)
 {
 	XVisualInfo template, *vi;
@@ -187,6 +187,33 @@ create_window(int x, int y)
 	return (0);
 }
 
+/* Create the overlay, or move/resize it to the requested rectangle. */
+static int
+place_window(int x, int y, int w, int h)
+{
+	if (win == 0) {
+		win_w = w;
+		win_h = h;
+		win_x = x;
+		win_y = y;
+		return (create_window(x, y));
+	}
+	if (w != win_w || h != win_h) {
+		win_w = w;
+		win_h = h;
+		win_x = x;
+		win_y = y;
+		XMoveResizeWindow(dpy, win, x, y, (unsigned)win_w,
+		    (unsigned)win_h);
+		apply_shape();
+	} else if (x != win_x || y != win_y) {
+		win_x = x;
+		win_y = y;
+		XMoveWindow(dpy, win, x, y);
+	}
+	return (0);
+}
+
 /*
  * Size the window as artwork plus padding — extra top/right room when a
  * badge rides along (more for a wide label) — and place it so the
@@ -258,27 +285,16 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	if (w <= 0 || h <= 0)
 		return (1);	/* fully past an edge: nothing visible */
 
-	if (win == 0) {
-		win_w = w;
-		win_h = h;
-		win_x = x;
-		win_y = y;
-		return (create_window(x, y));
-	}
-	if (w != win_w || h != win_h) {
-		win_w = w;
-		win_h = h;
-		win_x = x;
-		win_y = y;
-		XMoveResizeWindow(dpy, win, x, y, (unsigned)win_w,
-		    (unsigned)win_h);
-		apply_shape();
-	} else if (x != win_x || y != win_y) {
-		win_x = x;
-		win_y = y;
-		XMoveWindow(dpy, win, x, y);
-	}
-	return (0);
+	return (place_window(x, y, w, h));
+}
+
+/* Full-panel window for text shows (countdown). */
+int
+layout_fullscreen(void)
+{
+	icon_ox = 0;
+	icon_oy = 0;
+	return (place_window(scr_x, scr_y, scr_w, scr_h));
 }
 
 static void
@@ -339,6 +355,18 @@ paint_rgba(const unsigned char *rgba, int iw, int ih)
  * kill/respawn) flashes between glyphs.
  */
 void
+raise_overlay(void)
+{
+	if (!mapped) {
+		XMapRaised(dpy, win);
+		mapped = 1;
+		XSync(dpy, False);
+	} else {
+		XRaiseWindow(dpy, win);
+	}
+}
+
+void
 paint_icon(const struct icon *ic, const struct show_req *req)
 {
 	int vis;
@@ -351,13 +379,7 @@ paint_icon(const struct icon *ic, const struct show_req *req)
 		return;
 	}
 
-	if (!mapped) {
-		XMapRaised(dpy, win);
-		mapped = 1;
-		XSync(dpy, False);
-	} else {
-		XRaiseWindow(dpy, win);
-	}
+	raise_overlay();
 	XClearWindow(dpy, win);
 	paint_rgba(ic->rgba, ic->w, ic->h);
 	draw_badge(ic, req->badge);

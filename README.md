@@ -33,6 +33,9 @@ bosd -n audio -y -20 audio-speakers     # shift up 20 px (positive = down)
 bosd -n audio -x -300 audio-speakers    # shift left 300 px (positive = right)
 bosd -n audio -s 2.0 audio-speakers     # twice the panel-derived size
 bosd -n audio -o audio-speakers         # no outline halo
+bosd -c 3                               # full-screen 3-2-1 countdown
+bosd -n shot -C                         # clear the channel's active render
+
 bosd /path/to/glyph.png          # one-shot, absolute path
 ```
 

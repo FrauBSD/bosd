@@ -9,8 +9,8 @@ ICONDIR?=	${SHAREDIR}/bosd
 CC?=		cc
 CFLAGS?=	-O2 -Wall -Wextra
 PKG_CONFIG?=	pkg-config
-XFT_CFLAGS!=	${PKG_CONFIG} --cflags xft
-XFT_LIBS!=	${PKG_CONFIG} --libs xft
+XFT_CFLAGS!=	${PKG_CONFIG} --cflags xft fontconfig
+XFT_LIBS!=	${PKG_CONFIG} --libs xft fontconfig
 CPPFLAGS+=	-I/usr/local/include -DBOSD_ICONDIR='"${ICONDIR}"' \
 		${XFT_CFLAGS}
 LDFLAGS+=	-L/usr/local/lib
@@ -18,7 +18,7 @@ LDLIBS=		-lX11 -lXrandr -lXrender -lXext -lpng ${XFT_LIBS}
 
 PROG=		bosd
 SRCS=		src/main.c src/daemon.c src/ipc.c src/png.c src/x11.c \
-		src/badge.c
+		src/badge.c src/countdown.c
 OBJS=		${SRCS:.c=.o}
 MAN=		man/bosd.1
 

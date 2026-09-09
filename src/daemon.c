@@ -108,6 +108,27 @@ wait_or_replace(int sockfd, double deadline, struct show_req *req,
 	return (0);
 }
 
+/* Tick the digits down; returns 1 when a new show preempted us. */
+static int
+countdown_cycle(struct show_req *req, int sockfd)
+{
+	struct show_req cur = *req;
+	int i;
+
+	if (countdown_begin(&cur) != 0)
+		return (0);
+	for (i = cur.count; i >= 1 && !stop; i--) {
+		countdown_tick(&cur, i);
+		if (wait_or_replace(sockfd, now_monotonic() + cur.hold,
+		    req, NULL, NULL)) {
+			countdown_end();
+			return (1);
+		}
+	}
+	countdown_end();
+	return (0);
+}
+
 static void
 show_cycle(struct show_req *req, int sockfd)
 {
@@ -115,9 +136,22 @@ show_cycle(struct show_req *req, int sockfd)
 	struct icon *ic;
 
 	drain_pending_shows(sockfd, req);
-	ic = icon_lookup(req->spec, req->scale, req->outline);
-	if (ic == NULL)
+restart:
+	if (req->clear) {
+		hide_overlay();
 		return;
+	}
+	if (req->count > 0) {
+		if (countdown_cycle(req, sockfd))
+			goto restart;
+		hide_overlay();
+		return;
+	}
+	ic = icon_lookup(req->spec, req->scale, req->outline);
+	if (ic == NULL) {
+		hide_overlay();
+		return;
+	}
 	paint_icon(ic, req);
 	shown = *req;
 
@@ -129,6 +163,8 @@ show_cycle(struct show_req *req, int sockfd)
 		    now_monotonic() + req->hold, req, ic, &shown);
 		if (!replaced)
 			break;
+		if (req->count > 0 || req->clear)
+			goto restart;
 		/* Unresolvable replacement: keep the current show up. */
 		next = icon_lookup(req->spec, req->scale, req->outline);
 		if (next != NULL) {

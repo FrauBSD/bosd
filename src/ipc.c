@@ -1,12 +1,13 @@
 /*
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
- * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE OUTL SPEC
- * [BADGE]" — HOLD in seconds, XOFF/YOFF signed shifts in pixels
+ * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE OUTL CNT
+ * SPEC [BADGE]" — HOLD in seconds, XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
- * size, OUTL 1 to halo the glyph and 0 not to, SPEC an absolute
- * path or a bare name resolved against BOSD_PATH / the compiled
- * share directory (".png" appended when missing).
+ * size, OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
+ * show (SPEC then a placeholder), SPEC an absolute path or a bare
+ * name resolved against BOSD_PATH / the compiled share directory
+ * (".png" appended when missing).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,11 +65,10 @@ write_pid_file(void)
 	return (0);
 }
 
-int
-send_show(const struct show_req *req)
+static int
+send_dgram(const char *msg)
 {
 	struct sockaddr_un addr;
-	char msg[BOSD_MSG_MAX];
 	int fd;
 	ssize_t n;
 
@@ -79,13 +79,28 @@ send_show(const struct show_req *req)
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, sock_name, sizeof(addr.sun_path));
-	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %s%s%s", req->hold,
-	    req->x_off, req->y_off, req->scale, req->outline, req->spec,
-	    req->badge[0] != '\0' ? " " : "", req->badge);
 	n = sendto(fd, msg, strlen(msg), MSG_DONTWAIT,
 	    (struct sockaddr *)&addr, sizeof(addr));
 	close(fd);
 	return (n < 0 ? -1 : 0);
+}
+
+int
+send_show(const struct show_req *req)
+{
+	char msg[BOSD_MSG_MAX];
+
+	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s%s%s",
+	    req->hold, req->x_off, req->y_off, req->scale, req->outline,
+	    req->count, req->spec[0] != '\0' ? req->spec : "-",
+	    req->badge[0] != '\0' ? " " : "", req->badge);
+	return (send_dgram(msg));
+}
+
+int
+send_clear(void)
+{
+	return (send_dgram("CLEAR"));
 }
 
 int
@@ -94,13 +109,19 @@ parse_show(const char *buf, struct show_req *req)
 	double hold, scale;
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
-	int n, x_off, y_off, outline;
+	int n, x_off, y_off, outline, count;
+
+	if (strcmp(buf, "CLEAR") == 0) {
+		memset(req, 0, sizeof(*req));
+		req->clear = 1;
+		return (0);
+	}
 
 	badge[0] = '\0';
 	/* Field widths track BOSD_SPEC_MAX / BOSD_BADGE_MAX. */
-	n = sscanf(buf, "%lf %d %d %lf %d %1023s %31s", &hold, &x_off,
-	    &y_off, &scale, &outline, name, badge);
-	if (n < 6)
+	n = sscanf(buf, "%lf %d %d %lf %d %d %1023s %31s", &hold, &x_off,
+	    &y_off, &scale, &outline, &count, name, badge);
+	if (n < 7)
 		return (-1);
 	if (hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
@@ -109,6 +130,8 @@ parse_show(const char *buf, struct show_req *req)
 	req->hold = hold;
 	req->scale = scale;
 	req->outline = outline != 0;
+	req->count = count > 0 ? count : 0;
+	req->clear = 0;
 	req->x_off = x_off;
 	req->y_off = y_off;
 	strlcpy(req->spec, name, sizeof(req->spec));

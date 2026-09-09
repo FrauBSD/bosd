@@ -19,7 +19,7 @@
 #define BOSD_BADGE_MAX	32	/* superscript label */
 #define BOSD_MSG_MAX	1160	/* "hold spec [badge]" datagram */
 #define BOSD_HOLD_DEF	2.0
-#define BOSD_HOLD_MIN	0.5
+#define BOSD_HOLD_MIN	0.01
 #define BOSD_HOLD_MAX	30.0
 #define BOSD_SCALE_MIN	0.1
 #define BOSD_SCALE_MAX	8.0
@@ -41,6 +41,8 @@ struct show_req {
 	double	 hold;
 	double	 scale;		/* multiplies the panel-derived size */
 	int	 outline;	/* black halo behind the glyph */
+	int	 count;		/* > 0: countdown show, not an icon */
+	int	 clear;		/* hide the active render, show nothing */
 	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
@@ -62,6 +64,9 @@ extern int	 win_w, win_h;
 extern int	 icon_ox, icon_oy;
 
 int	 init_display(void);
+Visual	*find_argb_visual(int *depth_out);
+int	 layout_fullscreen(void);
+void	 raise_overlay(void);
 void	 paint_icon(const struct icon *, const struct show_req *);
 void	 hide_overlay(void);
 void	 x11_cleanup(void);
@@ -82,8 +87,15 @@ void	 resolve_ipc_names(void);
 int	 daemon_alive(void);
 int	 write_pid_file(void);
 int	 send_show(const struct show_req *);
+int	 send_clear(void);
 int	 parse_show(const char *buf, struct show_req *);
 int	 icon_resolve(const char *spec, char *path, size_t pathlen);
+
+/* countdown.c */
+int	 countdown_begin(const struct show_req *);
+void	 countdown_tick(const struct show_req *, int digit);
+void	 countdown_end(void);
+int	 run_countdown(const struct show_req *);
 
 /* daemon.c */
 extern volatile sig_atomic_t stop;
