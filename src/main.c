@@ -36,7 +36,7 @@ main(int argc, char **argv)
 	req.scale = 1.0;
 	req.outline = 1;
 
-	while ((ch = getopt(argc, argv, "Cb:c:dhn:os:t:x:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "Cb:c:dhn:os:tx:y:")) != -1) {
 		switch (ch) {
 		case 'C':
 			Cflag = 1;
@@ -89,17 +89,12 @@ main(int argc, char **argv)
 			}
 			break;
 		case 't':
-			if (optarg[0] == '\0' ||
-			    strlen(optarg) >= sizeof(req.spec) ||
-			    optarg[strcspn(optarg, " \t\n")] != '\0') {
-				fprintf(stderr, "bosd: -t text must be "
-				    "1 to %zu characters, no whitespace "
-				    "(escape it: \\x20)\n",
-				    sizeof(req.spec) - 1);
-				usage();
-			}
+			/*
+			 * Flag, not an argument: the text is the first
+			 * operand, so getopt stops there and a negative
+			 * hold_seconds after it needs no "--".
+			 */
 			tflag = 1;
-			strlcpy(req.spec, optarg, sizeof(req.spec));
 			break;
 		case 'x':
 			req.x_off = atoi(optarg);
@@ -132,22 +127,53 @@ main(int argc, char **argv)
 	}
 
 	if (count > 0 || tflag) {
-		if (argc > 1 || (count > 0 && tflag))
+		const char *holdarg = NULL;
+
+		if (count > 0 && tflag)
 			usage();
+		if (tflag) {
+			if (argc < 1 || argc > 2)
+				usage();
+			if (argv[0][0] == '\0' ||
+			    strlen(argv[0]) >= sizeof(req.spec) ||
+			    argv[0][strcspn(argv[0], " \t\n")] != '\0') {
+				fprintf(stderr, "bosd: -t text must be "
+				    "1 to %zu characters, no whitespace "
+				    "(escape it: \\x20)\n",
+				    sizeof(req.spec) - 1);
+				usage();
+			}
+			strlcpy(req.spec, argv[0], sizeof(req.spec));
+			if (argc == 2)
+				holdarg = argv[1];
+		} else {
+			if (argc > 1)
+				usage();
+			req.hold = 1.0;	/* one second per digit */
+			if (argc == 1)
+				holdarg = argv[0];
+		}
 		req.count = count;
 		req.text = tflag;
-		if (count > 0)
-			req.hold = 1.0;	/* one second per digit */
-		if (argc == 1) {
+		if (holdarg != NULL) {
 			char *ep;
 
-			req.hold = strtod(argv[0], &ep);
-			if (ep == argv[0] || *ep != '\0')
+			req.hold = strtod(holdarg, &ep);
+			if (ep == holdarg || *ep != '\0')
 				usage();
-			if (req.hold < BOSD_HOLD_MIN)
-				req.hold = BOSD_HOLD_MIN;
-			if (req.hold > BOSD_HOLD_MAX)
-				req.hold = BOSD_HOLD_MAX;
+			if (req.hold == -1.0) {
+				/* Indefinite: a countdown must advance. */
+				if (count > 0) {
+					fprintf(stderr, "bosd: -c cannot "
+					    "hold indefinitely (-1)\n");
+					usage();
+				}
+			} else {
+				if (req.hold < BOSD_HOLD_MIN)
+					req.hold = BOSD_HOLD_MIN;
+				if (req.hold > BOSD_HOLD_MAX)
+					req.hold = BOSD_HOLD_MAX;
+			}
 		}
 		if (daemon_alive() && send_show(&req) == 0)
 			return (0);
@@ -161,10 +187,12 @@ main(int argc, char **argv)
 	strlcpy(req.spec, argv[0], sizeof(req.spec));
 	if (argc == 2)
 		req.hold = atof(argv[1]);
-	if (req.hold < BOSD_HOLD_MIN)
-		req.hold = BOSD_HOLD_MIN;
-	if (req.hold > BOSD_HOLD_MAX)
-		req.hold = BOSD_HOLD_MAX;
+	if (req.hold != -1.0) {	/* -1: hold until replaced or cleared */
+		if (req.hold < BOSD_HOLD_MIN)
+			req.hold = BOSD_HOLD_MIN;
+		if (req.hold > BOSD_HOLD_MAX)
+			req.hold = BOSD_HOLD_MAX;
+	}
 
 	if (daemon_alive() && send_show(&req) == 0)
 		return (0);

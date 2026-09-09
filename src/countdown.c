@@ -33,9 +33,14 @@ on_signal(int sig __unused)
 static void
 hold_exact(double seconds)
 {
-	double deadline = now_monotonic() + seconds;
-	double t;
+	double deadline, t;
 
+	if (seconds < 0.0) {	/* indefinite: until SIGINT/SIGTERM */
+		while (!stop)
+			usleep(100000);
+		return;
+	}
+	deadline = now_monotonic() + seconds;
 	while (!stop && (t = now_monotonic()) < deadline) {
 		double left = deadline - t;
 

@@ -58,6 +58,7 @@ drain_pending_shows(int sockfd, struct show_req *req)
 	}
 }
 
+/* A negative deadline never expires (indefinite hold). */
 static int
 wait_or_replace(int sockfd, double deadline, struct show_req *req,
     const struct icon *cur, const struct show_req *shown)
@@ -67,15 +68,18 @@ wait_or_replace(int sockfd, double deadline, struct show_req *req,
 	struct show_req next;
 	ssize_t n;
 
-	while (!stop && now_monotonic() < deadline) {
-		double left = deadline - now_monotonic();
-		int ms;
+	while (!stop) {
+		int ms = 1000;
 
-		if (left <= 0.0)
-			break;
-		ms = (int)(left * 1000.0);
-		if (ms <= 0)
-			ms = 1;
+		if (deadline >= 0.0) {
+			double left = deadline - now_monotonic();
+
+			if (left <= 0.0)
+				break;
+			ms = (int)(left * 1000.0);
+			if (ms <= 0)
+				ms = 1;
+		}
 
 		/* Service Expose so a compositor restart cannot blank us. */
 		while (dpy != NULL && XPending(dpy) > 0) {
@@ -106,6 +110,13 @@ wait_or_replace(int sockfd, double deadline, struct show_req *req,
 	}
 
 	return (0);
+}
+
+/* Hold expiry time, or never for an indefinite (-1) hold. */
+static double
+hold_deadline(double hold)
+{
+	return (hold < 0.0 ? -1.0 : now_monotonic() + hold);
 }
 
 /* Tick the digits down; returns 1 when a new show preempted us. */
@@ -139,7 +150,7 @@ text_cycle(struct show_req *req, int sockfd)
 	if (countdown_begin(&cur) != 0)
 		return (0);
 	text_tick(&cur);
-	replaced = wait_or_replace(sockfd, now_monotonic() + cur.hold,
+	replaced = wait_or_replace(sockfd, hold_deadline(cur.hold),
 	    req, NULL, NULL);
 	countdown_end();
 	return (replaced);
@@ -182,7 +193,7 @@ restart:
 		int replaced;
 
 		replaced = wait_or_replace(sockfd,
-		    now_monotonic() + req->hold, req, ic, &shown);
+		    hold_deadline(req->hold), req, ic, &shown);
 		if (!replaced)
 			break;
 		if (req->count > 0 || req->text || req->clear)
@@ -264,7 +275,7 @@ show_once(const struct show_req *req)
 	double deadline, hold;
 
 	hold = req->hold;
-	if (hold <= 0.0)
+	if (hold != -1.0 && hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
 	if (init_display() != 0)
 		return (1);
@@ -278,8 +289,9 @@ show_once(const struct show_req *req)
 	}
 	paint_icon(ic, req);
 
-	deadline = now_monotonic() + hold;
-	while (now_monotonic() < deadline) {
+	/* Indefinite hold ends via SIGINT/SIGTERM -> cleanup(). */
+	deadline = hold < 0.0 ? -1.0 : now_monotonic() + hold;
+	while (deadline < 0.0 || now_monotonic() < deadline) {
 		while (XPending(dpy) > 0) {
 			XEvent ev;
 			XNextEvent(dpy, &ev);

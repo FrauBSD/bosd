@@ -59,7 +59,8 @@ badges as
 .Dq a b .
 .It Fl C
 Clear the channel's active render \(em hide an in-progress show,
-such as a long countdown \(em and return immediately.
+such as a long countdown or an indefinite (\-1) hold \(em and
+return immediately.
 Without a running daemon there is nothing to clear.
 .It Fl c Ar countdown
 Count down from
@@ -156,6 +157,14 @@ sends a show request to the running daemon for the channel; if no
 daemon is alive, it paints the glyph itself and exits when
 .Ar hold_seconds
 (default 2.0, clamped to 0.01\(en30) elapse.
+A
+.Ar hold_seconds
+of \-1 holds the show until it is replaced or cleared with
+.Fl C ;
+without a daemon, until interrupted (e.g. Ctrl-C).
+It does not apply to
+.Fl c ,
+whose digits must advance.
 .Sh ICON RESOLUTION
 An
 .Ar icon
