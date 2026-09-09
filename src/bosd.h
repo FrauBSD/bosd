@@ -15,6 +15,8 @@
 
 #include <X11/Xlib.h>
 
+#define BOSD_VERSION	"1.0"
+
 #define BOSD_SPEC_MAX	1024	/* icon spec (path or bare name) */
 #define BOSD_BADGE_MAX	32	/* superscript label */
 #define BOSD_CAPTION_MAX 64	/* caption above/below the artwork */

@@ -16,8 +16,8 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-	    "Usage: bosd [-h] [-n instance] { -d | -C }\n"
-	    "       bosd [-Dho] [-n instance] [-a text] [-b badge] "
+	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
+	    "       bosd [-Dhov] [-n instance] [-a text] [-b badge] "
 	    "[-p text] \\\n"
 	    "            [-s scale] [-x offset] [-y offset] \\\n"
 	    "            { icon | -c countdown | -t text } "
@@ -46,7 +46,7 @@ main(int argc, char **argv)
 	req.scale = 1.0;
 	req.outline = 1;
 
-	while ((ch = getopt(argc, argv, "CDa:b:c:dhn:op:s:tx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "CDa:b:c:dhn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'C':
 			Cflag = 1;
@@ -127,6 +127,9 @@ main(int argc, char **argv)
 			 */
 			tflag = 1;
 			break;
+		case 'v':
+			printf("%s\n", BOSD_VERSION);
+			return (0);
 		case 'x':
 			req.x_off = atoi(optarg);
 			break;
