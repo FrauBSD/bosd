@@ -17,11 +17,15 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
-	    "       bosd [-Dhov] [-n instance] [-a text] [-b badge] "
-	    "[-p text] \\\n"
-	    "            [-s scale] [-x offset] [-y offset] \\\n"
-	    "            { icon | -c countdown | -t text } "
-	    "[hold_seconds]\n");
+	    "       bosd [-Dhov] [-n instance] [-a text] [-B seconds] "
+	    "[-b badge] \\\n"
+	    "            [-G color] [-g percent] [-p text] [-s scale] "
+	    "[-x offset] \\\n"
+	    "            [-y offset] { icon | -c countdown | -t text } "
+	    "[hold_seconds]\n"
+	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
+	    "[-x offset] \\\n"
+	    "            [-y offset] -g percent\n");
 	exit(1);
 }
 
@@ -35,19 +39,46 @@ decode_field(char *s, size_t size)
 	strlcpy(s, tmp, size);
 }
 
+/* hold_seconds semantics: -1 indefinite, else clamped. */
+static double
+parse_hold(const char *s)
+{
+	char *ep;
+	double hold;
+
+	hold = strtod(s, &ep);
+	if (ep == s || *ep != '\0')
+		usage();
+	if (hold != -1.0) {
+		if (hold < BOSD_HOLD_MIN)
+			hold = BOSD_HOLD_MIN;
+		if (hold > BOSD_HOLD_MAX)
+			hold = BOSD_HOLD_MAX;
+	}
+	return (hold);
+}
+
 int
 main(int argc, char **argv)
 {
 	struct show_req req;
-	int ch, count = 0, Cflag = 0, Dflag = 0, dflag = 0, tflag = 0;
+	int ch, count = 0, Bflag = 0, Cflag = 0, Dflag = 0;
+	int dflag = 0, tflag = 0;
 
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.outline = 1;
+	req.gauge = -1;
+	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
-	while ((ch = getopt(argc, argv, "CDa:b:c:dhn:op:s:tvx:y:")) != -1) {
+	while ((ch = getopt(argc, argv,
+	    "B:CDG:a:b:c:dg:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
+		case 'B':
+			Bflag = 1;
+			req.gauge_hold = parse_hold(optarg);
+			break;
 		case 'C':
 			Cflag = 1;
 			break;
@@ -62,6 +93,15 @@ main(int argc, char **argv)
 			break;
 		case 'D':
 			Dflag = 1;	/* render directly, skip daemon */
+			break;
+		case 'G':
+			if (strlen(optarg) >= sizeof(req.color)) {
+				fprintf(stderr, "bosd: -G color must be "
+				    "at most %zu characters\n",
+				    sizeof(req.color) - 1);
+				usage();
+			}
+			strlcpy(req.color, optarg, sizeof(req.color));
 			break;
 		case 'b':
 			if (strlen(optarg) >= sizeof(req.badge) ||
@@ -91,6 +131,21 @@ main(int argc, char **argv)
 		case 'd':
 			dflag = 1;
 			break;
+		case 'g': {
+			char *ep;
+			long v;
+
+			errno = 0;
+			v = strtol(optarg, &ep, 10);
+			if (ep == optarg || *ep != '\0' || errno != 0 ||
+			    v < 0 || v > 9999) {
+				fprintf(stderr, "bosd: -g percent must "
+				    "be 0 to 9999\n");
+				usage();
+			}
+			req.gauge = (int)v;
+			break;
+		}
 		case 'n':
 			if (strlen(optarg) >= sizeof(instance) ||
 			    strchr(optarg, '/') != NULL)
@@ -150,13 +205,14 @@ main(int argc, char **argv)
 			usage();
 		if (Dflag && Cflag) {
 			fprintf(stderr, "bosd: -D renders directly and "
-			    "cannot clear a daemon's show (-C)\n");
+			    "cannot clear a daemon's display (-C)\n");
 			usage();
 		}
 		if (Dflag || argc != 0 || count != 0 || tflag ||
-		    req.badge[0] != '\0' || req.prefix[0] != '\0' ||
-		    req.append[0] != '\0' || req.scale != 1.0 ||
-		    !req.outline || req.x_off != 0 || req.y_off != 0)
+		    req.gauge >= 0 || req.badge[0] != '\0' ||
+		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
+		    req.scale != 1.0 || !req.outline ||
+		    req.x_off != 0 || req.y_off != 0)
 			usage();
 		if (dflag)
 			return (run_daemon());
@@ -164,6 +220,26 @@ main(int argc, char **argv)
 		if (daemon_alive())
 			return (send_clear() != 0);
 		return (0);
+	}
+
+	if (req.gauge < 0 && (Bflag || req.color[0] != '\0')) {
+		fprintf(stderr,
+		    "bosd: -B and -G describe the bar; they require -g\n");
+		usage();
+	}
+
+	/* Gauge alone: no icon operand, no -c, no -t. */
+	if (req.gauge >= 0 && count == 0 && !tflag && argc == 0) {
+		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
+		    req.append[0] != '\0' || req.scale != 1.0 ||
+		    !req.outline) {
+			fprintf(stderr, "bosd: -b, -o, -s, -a, -p adorn "
+			    "the artwork, not the bar\n");
+			usage();
+		}
+		if (!Dflag && daemon_alive() && send_show(&req) == 0)
+			return (0);
+		return (run_bar(&req));
 	}
 
 	if (count > 0 || tflag) {

@@ -18,29 +18,47 @@
 .Op Fl Dhov
 .Op Fl n Ar instance
 .Op Fl a Ar text
+.Op Fl B Ar seconds
 .Op Fl b Ar badge
+.Op Fl G Ar color
+.Op Fl g Ar percent
 .Op Fl p Ar text
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
 .Bro Ar icon | Fl c Ar countdown | Fl t Ar text Brc
 .Op Ar hold_seconds
+.Nm
+.Op Fl Dhv
+.Op Fl n Ar instance
+.Op Fl B Ar seconds
+.Op Fl G Ar color
+.Op Fl x Ar offset
+.Op Fl y Ar offset
+.Fl g Ar percent
 .Sh DESCRIPTION
 .Nm
-paints a PNG glyph, scaled to the panel and outlined for
-legibility, in a centered click-through ARGB32 overlay window.
-The overlay is centered on the primary output, falling back to the
-first connected internal panel (eDP/LVDS/DSI), then the whole X
-screen.
-Countdown digits
-.Pq Fl c
-and short outlined text
-.Pq Fl t
-draw in the same overlay.
-.Nm
-is the display engine behind media-key and hotkey feedback: a
-warm daemon owns the window, and clients replace the visible show
-in place, so rapid key repeats never flash.
+is an on-screen display engine: it flashes transient,
+click-through feedback over the desktop, the kind a desktop
+environment shows for media keys and hotkeys.
+Feedback takes four forms: a PNG glyph scaled to the panel and
+outlined for legibility, giant countdown digits
+.Pq Fl c ,
+short outlined text
+.Pq Fl t ,
+and a gauge bar
+.Pq Fl g .
+Glyph, digits, and text composite directly over the desktop,
+centered on the monitor marked primary
+.Pq see Xr xrandr 1 ;
+when no primary is set, on the laptop's built-in panel
+.Pq eDP/LVDS/DSI ;
+and failing both, on the X screen as a whole.
+The gauge bar runs on an independent timer, so a gauge and a
+glyph can be up at once: a new gauge replaces the gauge, new
+artwork replaces the artwork, and neither clears the other.
+A warm daemon keeps both on screen and repaints in place, so
+rapid key repeats never flash.
 .Pp
 The options are as follows:
 .Bl -tag -width "-n instance"
@@ -53,11 +71,19 @@ Escapes decode as with
 .Fl t ;
 literal whitespace is permitted.
 At most 63 characters before decoding.
+.It Fl B Ar seconds
+Hold the gauge bar for
+.Ar seconds
+.Pq default 3.0, clamped to 0.01-30 ,
+independent of the hold on the glyph, digits, or text.
+A value of \-1 holds the bar until it is replaced or cleared.
+Requires
+.Fl g .
 .It Fl b Ar badge
 Draw
 .Ar badge
-as a superscript at the glyph's upper right \(em white with a black
-outline, about a quarter of the glyph height.
+as a superscript at the glyph's upper right
+.Pq white with a black outline, about a quarter of the glyph height .
 Used for index digits and short labels
 .Pq e.g. a headphone number, Dq All .
 At most 31 characters before decoding; literal whitespace is not
@@ -69,9 +95,10 @@ so
 badges as
 .Dq a b .
 .It Fl C
-Clear the channel's active render \(em hide an in-progress show,
-such as a long countdown or an indefinite (\-1) hold \(em and
-return immediately.
+Clear the channel's display, artwork and gauge alike.
+An in-progress countdown or an indefinite
+.Pq \-1
+hold included, returning immediately.
 Without a running daemon there is nothing to clear.
 .It Fl c Ar countdown
 Count down from
@@ -79,34 +106,73 @@ Count down from
 to 1 in huge outlined digits on a full-panel overlay, one second
 per digit
 .Pq Ar hold_seconds overrides ,
-then exit \(em the screenshot timer.
+then exit.
 Replaces
 .Ar icon
-and is dispatched to the channel daemon like any show, replacing
-whatever it displays (and vice versa); without a daemon the
+and is dispatched to the channel daemon like an icon, replacing
+whatever it displays
+.Pq and vice versa ;
+without a daemon the
 invoking process draws it and returns when done.
 Honors
 .Fl b , o , s , x ,
 and
 .Fl y :
-the badge rides the digits' upper right and
+the badge sits at the digits' upper right and
 .Fl s
 scales the digits.
 .It Fl D
 Render directly in the invoking process, ignoring any running
 channel daemon, and exit when the hold elapses.
-Useful for trying a show without disturbing what the daemon
-displays, or for pacing an animation from a script.
+Useful for a quick look without disturbing what the daemon
+displays.
 .It Fl d
 Run as the display daemon for
 .Ar instance ,
 listening on a per-user datagram socket.
+.It Fl G Ar color
+Fill the gauge bar's ticks with
+.Ar color ,
+a name or #rrggbb
+.Pq default green #2AC12A .
+.Nm
+assigns the bar no meaning
+.Pq the caller encodes states such as muted through the color .
+Requires
+.Fl g .
+.It Fl g Ar percent
+Draw the gauge bar: 56 ticks bottom-centered on the panel, 64
+pixels up, filled ticks tall and the rest short
+.Po
+the classic xosd bar look, drawn by
+.Nm
+itself with no library dependency
+.Pc .
+Above 100% the fill stays full and the percentage is written just
+past the bar's right edge in the same color.
+Alone it shows only the bar; alongside an
+.Ar icon ,
+.Fl c ,
+or
+.Fl t
+the two go up together, each expiring on its own hold:
+.Bd -literal -offset indent
+bosd -b 2 -g 200 -G orange audio-headphones
+.Ed
+.Pp
+Honors
+.Fl x
+and
+.Fl y .
 .It Fl h
 Print usage and exit.
 .It Fl n Ar instance
-Select the OSD channel (default
-.Dq Li default ) .
-Independent channels own independent windows and sockets.
+Select the OSD channel
+.Po
+default
+.Dq Li default
+.Pc .
+Each channel has its own overlay and socket.
 .It Fl o
 Skip the black outline normally drawn behind the glyph for
 legibility on any wallpaper.
@@ -122,7 +188,7 @@ marking seconds.
 .It Fl s Ar scale
 Multiply the panel-derived render size by
 .Ar scale
-(0.1 to 8.0, default 1.0).
+.Pq 0.1 to 8.0, default 1.0 .
 The glyph is normally sized from the panel height, independent of
 the PNG's native resolution;
 .Fl s Li 2.0
@@ -131,22 +197,27 @@ renders it twice that size.
 Draw
 .Ar text
 in the countdown's giant outlined style, centered on the panel and
-held like an icon show \(em e.g. the checkmark confirming a
-screenshot.
+held like an icon
+.Pq e.g. the checkmark confirming a screenshot .
 Replaces
 .Ar icon
-and is dispatched like any show.
+and is dispatched like one.
 Escapes decode before rendering:
 .Ql \ex Ns Ar NN
 a raw byte,
 .Ql \eu Ns Ar NNNN
 and
 .Ql \eU Ns Ar NNNNNNNN
-a Unicode codepoint (UTF-8 encoded), and
+a Unicode codepoint
+.Pq UTF-8 encoded ,
+and
 .Ql \e\e
-a backslash \(em so
+a backslash
+.Po
+so
 .Fl t Ql \eu2713
-draws the checkmark.
+draws the checkmark
+.Pc .
 Literal whitespace is not permitted; embed it as
 .Ql \ex20 .
 Honors
@@ -166,32 +237,38 @@ Shift the artwork vertically by
 .Ar offset
 pixels from panel center: positive down, negative up
 .Pq X11 coordinate sense .
-Consumers sharing a screen with fixed chrome (e.g. a taskbar) can
+Consumers sharing a screen with fixed chrome
+.Pq e.g. a taskbar
+can
 recenter within the remaining space, such as
 .Fl y Li -20
 above a 40-pixel bottom bar.
 Offset placement is exact; artwork carried past a panel edge is
 clipped at the edge rather than shown on a neighboring output,
-so a large offset slides a show in from beyond it.
-Only offset-free shows are clamped to remain fully visible.
+so a large offset slides the artwork in from beyond it.
+Without offsets, placement is clamped to remain fully visible.
 .El
 .Pp
 Without
 .Fl d ,
 .Nm
-sends a show request to the running daemon for the channel; if no
-daemon is alive, it paints the glyph itself and exits when
+hands the request to the running daemon for the channel; if no
+daemon is alive, it paints the glyph, bar, or text itself and
+exits when
 .Ar hold_seconds
-(default 2.0, clamped to 0.01\(en30) elapse.
+elapse
+.Pq default 2.0 for glyph or text, default 3.0 for bar; clamped to 0.01-30 .
 A
 .Ar hold_seconds
-of \-1 holds the show until it is replaced or cleared with
+of \-1 holds the display until it is replaced or cleared with
 .Fl C ;
-without a daemon, until interrupted (e.g. Ctrl-C).
-It does not apply to
+without a daemon, until interrupted
+.Pq e.g. Ctrl-C .
+With
 .Fl c ,
-whose digits must advance.
-.Sh ICON RESOLUTION
+.Ar hold_seconds
+times each digit, so \-1 is rejected: the digits must advance.
+.Pp
 An
 .Ar icon
 containing a slash is used as a path.
@@ -211,7 +288,7 @@ X11 display to draw on.
 .Sh FILES
 .Bl -tag -width "/tmp/bosd.instance.uid.sock" -compact
 .It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .sock
-show-request socket
+request socket
 .It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .pid
 daemon pid
 .It Pa /usr/local/share/bosd

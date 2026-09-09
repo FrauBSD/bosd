@@ -11,7 +11,8 @@
  * when absent, whitespace escaped in flight), SPEC otherwise an
  * absolute path or a bare name resolved against BOSD_PATH / the
  * compiled share directory (".png" appended when missing).  A bare
- * "CLEAR" hides the active render.
+ * "CLEAR" hides the active render(s).  A gauge travels separately as
+ * "BAR HOLD XOFF YOFF PCT COLOR" and coexists with the main show.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,6 +116,16 @@ send_show(const struct show_req *req)
 	char msg[BOSD_MSG_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 
+	if (req->gauge >= 0) {
+		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s",
+		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
+		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF);
+		if (send_dgram(msg) != 0)
+			return (-1);
+		/* Gauge alone, or artwork too? */
+		if (req->spec[0] == '\0' && req->count <= 0 && !req->text)
+			return (0);
+	}
 	encode_ws(req->prefix, pfx, sizeof(pfx));
 	encode_ws(req->append, apx, sizeof(apx));
 	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s %s %s%s%s",
@@ -143,6 +154,21 @@ parse_show(const char *buf, struct show_req *req)
 	if (strcmp(buf, "CLEAR") == 0) {
 		memset(req, 0, sizeof(*req));
 		req->clear = 1;
+		req->gauge = -1;
+		return (0);
+	}
+	if (strncmp(buf, "BAR ", 4) == 0) {
+		memset(req, 0, sizeof(*req));
+		n = sscanf(buf + 4, "%lf %d %d %d %31s", &hold, &x_off,
+		    &y_off, &req->gauge, req->color);
+		if (n < 5 || req->gauge < 0)
+			return (-1);
+		if (hold != -1.0 && hold <= 0.0)
+			hold = BOSD_GAUGE_HOLD_DEF;
+		req->hold = hold;
+		req->gauge_hold = hold;
+		req->x_off = x_off;
+		req->y_off = y_off;
 		return (0);
 	}
 
@@ -165,6 +191,7 @@ parse_show(const char *buf, struct show_req *req)
 	req->count = count > 0 ? count : 0;
 	req->text = count < 0;
 	req->clear = 0;
+	req->gauge = -1;
 	req->x_off = x_off;
 	req->y_off = y_off;
 	strlcpy(req->spec, name, sizeof(req->spec));

@@ -417,10 +417,30 @@ countdown_end(void)
 	}
 }
 
+/* After the artwork comes down, let a gauge finish its own hold. */
+static void
+bar_linger(const struct show_req *req, double bstart)
+{
+	double left;
+
+	if (req->gauge < 0 || stop)
+		return;
+	if (req->gauge_hold < 0.0) {	/* until SIGINT/SIGTERM */
+		while (!stop)
+			usleep(100000);
+	} else {
+		left = bstart + req->gauge_hold - now_monotonic();
+		if (left > 0.0)
+			hold_exact(left);
+	}
+	bar_hide();
+}
+
 /* One-shot fallback: no daemon on the channel, draw it ourselves. */
 int
 run_countdown(const struct show_req *req)
 {
+	double bstart;
 	int i;
 
 	if (init_display() != 0)
@@ -430,12 +450,16 @@ run_countdown(const struct show_req *req)
 
 	if (countdown_begin(req) != 0)
 		return (1);
+	bstart = now_monotonic();
+	if (req->gauge >= 0)
+		bar_show(req);
 	for (i = req->count; i >= 1 && !stop; i--) {
 		countdown_tick(req, i);
 		hold_exact(req->hold);
 	}
 	countdown_end();
 	hide_overlay();
+	bar_linger(req, bstart);
 	x11_cleanup();
 	return (0);
 }
@@ -444,6 +468,8 @@ run_countdown(const struct show_req *req)
 int
 run_text(const struct show_req *req)
 {
+	double bstart;
+
 	if (init_display() != 0)
 		return (1);
 	signal(SIGTERM, on_signal);
@@ -451,10 +477,14 @@ run_text(const struct show_req *req)
 
 	if (countdown_begin(req) != 0)
 		return (1);
+	bstart = now_monotonic();
+	if (req->gauge >= 0)
+		bar_show(req);
 	text_tick(req);
 	hold_exact(req->hold);
 	countdown_end();
 	hide_overlay();
+	bar_linger(req, bstart);
 	x11_cleanup();
 	return (0);
 }

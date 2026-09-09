@@ -1,5 +1,11 @@
 /*
- * Daemon event loop, show cycle, and the socketless one-shot fallback.
+ * Daemon event loop and the socketless one-shot fallback.
+ *
+ * Two independent slots: the main show (icon, countdown, text) and
+ * the gauge bar, each with its own window and its own expiry.  A bar
+ * replaces a bar and a main show replaces a main show; neither
+ * touches the other, so a gauge and a glyph can be up at once.  CLEAR
+ * drops both.
  */
 #include <errno.h>
 #include <poll.h>
@@ -16,6 +22,18 @@
 
 volatile sig_atomic_t stop;
 int sock = -1;
+
+/* Main-show slot. */
+enum { M_NONE, M_ICON, M_COUNT, M_TEXT };
+static int m_kind;
+static struct show_req m_req;
+static double m_deadline;	/* next tick or expiry; < 0 never */
+static int m_digit;
+static struct icon *m_icon;
+
+/* Gauge slot. */
+static int b_active;
+static double b_deadline;
 
 void
 cleanup(int sig __unused)
@@ -40,11 +58,113 @@ now_monotonic(void)
 	return ((double)ts.tv_sec + (double)ts.tv_nsec / 1e9);
 }
 
+static double
+expiry(double hold)
+{
+	return (hold < 0.0 ? -1.0 : now_monotonic() + hold);
+}
+
 static void
-drain_pending_shows(int sockfd, struct show_req *req)
+main_stop(void)
+{
+	if (m_kind == M_COUNT || m_kind == M_TEXT)
+		countdown_end();
+	if (m_kind != M_NONE)
+		hide_overlay();
+	m_kind = M_NONE;
+	m_icon = NULL;
+}
+
+static void
+main_start(const struct show_req *req)
+{
+	if (m_kind == M_COUNT || m_kind == M_TEXT)
+		countdown_end();
+
+	if (req->count > 0) {
+		m_req = *req;
+		if (countdown_begin(&m_req) != 0) {
+			main_stop();
+			return;
+		}
+		m_kind = M_COUNT;
+		m_digit = m_req.count;
+		countdown_tick(&m_req, m_digit);
+		m_deadline = expiry(m_req.hold);
+		return;
+	}
+	if (req->text) {
+		m_req = *req;
+		if (countdown_begin(&m_req) != 0) {
+			main_stop();
+			return;
+		}
+		m_kind = M_TEXT;
+		text_tick(&m_req);
+		m_deadline = expiry(m_req.hold);
+		return;
+	}
+
+	/* Icon: an unresolvable replacement keeps the current show. */
+	{
+		struct icon *ic;
+
+		ic = icon_lookup(req->spec, req->scale, req->outline);
+		if (ic == NULL) {
+			if (m_kind == M_NONE)
+				hide_overlay();
+			return;
+		}
+		m_req = *req;
+		m_kind = M_ICON;
+		m_icon = ic;
+		paint_icon(m_icon, &m_req);
+		m_deadline = expiry(m_req.hold);
+	}
+}
+
+/* Deadline passed: advance a countdown, or take the show down. */
+static void
+main_expire(void)
+{
+	if (m_kind == M_COUNT && m_digit > 1) {
+		m_digit--;
+		countdown_tick(&m_req, m_digit);
+		m_deadline = expiry(m_req.hold);
+		return;
+	}
+	main_stop();
+}
+
+/* Nearest pending deadline as a poll timeout, capped for X service. */
+static int
+next_timeout(void)
+{
+	double next = -1.0, now;
+	int ms;
+
+	if (m_kind != M_NONE && m_deadline >= 0.0)
+		next = m_deadline;
+	if (b_active && b_deadline >= 0.0 &&
+	    (next < 0.0 || b_deadline < next))
+		next = b_deadline;
+	if (next < 0.0)
+		return (1000);
+	now = now_monotonic();
+	if (next <= now)
+		return (0);
+	ms = (int)((next - now) * 1000.0) + 1;
+	return (ms > 1000 ? 1000 : ms);
+}
+
+/* Drain pending datagrams; the latest of each slot's kind wins. */
+static void
+drain_socket(int sockfd)
 {
 	char buf[BOSD_MSG_MAX];
-	struct show_req next;
+	struct show_req req;
+	int have_main = 0, have_bar = 0;
+	struct show_req mreq, breq;
 	ssize_t n;
 
 	for (;;) {
@@ -52,170 +172,51 @@ drain_pending_shows(int sockfd, struct show_req *req)
 		if (n <= 0)
 			break;
 		buf[n] = '\0';
-		if (parse_show(buf, &next) != 0)
+		if (parse_show(buf, &req) != 0)
 			continue;
-		*req = next;
-	}
-}
-
-/* A negative deadline never expires (indefinite hold). */
-static int
-wait_or_replace(int sockfd, double deadline, struct show_req *req,
-    const struct icon *cur, const struct show_req *shown)
-{
-	struct pollfd pfd;
-	char buf[BOSD_MSG_MAX];
-	struct show_req next;
-	ssize_t n;
-
-	while (!stop) {
-		int ms = 1000;
-
-		if (deadline >= 0.0) {
-			double left = deadline - now_monotonic();
-
-			if (left <= 0.0)
-				break;
-			ms = (int)(left * 1000.0);
-			if (ms <= 0)
-				ms = 1;
-		}
-
-		/* Service Expose so a compositor restart cannot blank us. */
-		while (dpy != NULL && XPending(dpy) > 0) {
-			XEvent ev;
-			XNextEvent(dpy, &ev);
-			if (ev.type == Expose && ev.xexpose.count == 0 &&
-			    mapped && cur != NULL)
-				paint_icon(cur, shown);
-		}
-
-		pfd.fd = sockfd;
-		pfd.events = POLLIN;
-		if (poll(&pfd, 1, ms) <= 0)
+		if (req.clear) {
+			main_stop();
+			bar_hide();
+			b_active = 0;
+			have_main = 0;
+			have_bar = 0;
 			continue;
-
-		n = recv(sockfd, buf, sizeof(buf) - 1, MSG_DONTWAIT);
-		if (n <= 0) {
-			if (n < 0 && (errno == EINTR || errno == EAGAIN))
-				continue;
-			break;
 		}
-		buf[n] = '\0';
-		if (parse_show(buf, &next) != 0)
-			continue;
-		*req = next;
-		drain_pending_shows(sockfd, req);
-		return (1);
-	}
-
-	return (0);
-}
-
-/* Hold expiry time, or never for an indefinite (-1) hold. */
-static double
-hold_deadline(double hold)
-{
-	return (hold < 0.0 ? -1.0 : now_monotonic() + hold);
-}
-
-/* Tick the digits down; returns 1 when a new show preempted us. */
-static int
-countdown_cycle(struct show_req *req, int sockfd)
-{
-	struct show_req cur = *req;
-	int i;
-
-	if (countdown_begin(&cur) != 0)
-		return (0);
-	for (i = cur.count; i >= 1 && !stop; i--) {
-		countdown_tick(&cur, i);
-		if (wait_or_replace(sockfd, now_monotonic() + cur.hold,
-		    req, NULL, NULL)) {
-			countdown_end();
-			return (1);
+		if (req.gauge >= 0) {
+			breq = req;
+			have_bar = 1;
+		} else {
+			mreq = req;
+			have_main = 1;
 		}
 	}
-	countdown_end();
-	return (0);
-}
-
-/* Hold a text show; returns 1 when a new show preempted us. */
-static int
-text_cycle(struct show_req *req, int sockfd)
-{
-	struct show_req cur = *req;
-	int replaced;
-
-	if (countdown_begin(&cur) != 0)
-		return (0);
-	text_tick(&cur);
-	replaced = wait_or_replace(sockfd, hold_deadline(cur.hold),
-	    req, NULL, NULL);
-	countdown_end();
-	return (replaced);
+	if (have_bar) {
+		if (bar_show(&breq) == 0) {
+			b_active = 1;
+			b_deadline = expiry(breq.hold);
+		}
+	}
+	if (have_main)
+		main_start(&mreq);
 }
 
 static void
-show_cycle(struct show_req *req, int sockfd)
+service_x(void)
 {
-	struct show_req shown;
-	struct icon *ic;
+	while (dpy != NULL && XPending(dpy) > 0) {
+		XEvent ev;
 
-	drain_pending_shows(sockfd, req);
-restart:
-	if (req->clear) {
-		hide_overlay();
-		return;
+		XNextEvent(dpy, &ev);
+		if (ev.type == Expose && ev.xexpose.count == 0 &&
+		    m_kind == M_ICON && mapped && m_icon != NULL)
+			paint_icon(m_icon, &m_req);
 	}
-	if (req->count > 0) {
-		if (countdown_cycle(req, sockfd))
-			goto restart;
-		hide_overlay();
-		return;
-	}
-	if (req->text) {
-		if (text_cycle(req, sockfd))
-			goto restart;
-		hide_overlay();
-		return;
-	}
-	ic = icon_lookup(req->spec, req->scale, req->outline);
-	if (ic == NULL) {
-		hide_overlay();
-		return;
-	}
-	paint_icon(ic, req);
-	shown = *req;
-
-	for (;;) {
-		struct icon *next;
-		int replaced;
-
-		replaced = wait_or_replace(sockfd,
-		    hold_deadline(req->hold), req, ic, &shown);
-		if (!replaced)
-			break;
-		if (req->count > 0 || req->text || req->clear)
-			goto restart;
-		/* Unresolvable replacement: keep the current show up. */
-		next = icon_lookup(req->spec, req->scale, req->outline);
-		if (next != NULL) {
-			ic = next;
-			paint_icon(ic, req);
-			shown = *req;
-		}
-	}
-
-	hide_overlay();
 }
 
 int
 run_daemon(void)
 {
 	struct sockaddr_un addr;
-	char buf[BOSD_MSG_MAX];
-	struct show_req req;
 
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
@@ -244,25 +245,26 @@ run_daemon(void)
 		return (1);
 	}
 
-	for (;;) {
+	while (!stop) {
 		struct pollfd pfd;
-		ssize_t n;
+		double now;
 
 		pfd.fd = sock;
 		pfd.events = POLLIN;
-		if (poll(&pfd, 1, 1000) <= 0)
-			continue;
-
-		n = recv(sock, buf, sizeof(buf) - 1, 0);
-		if (n <= 0) {
-			if (n < 0 && errno == EINTR)
-				continue;
+		if (poll(&pfd, 1, next_timeout()) < 0 && errno != EINTR)
 			break;
+		if (pfd.revents & POLLIN)
+			drain_socket(sock);
+
+		now = now_monotonic();
+		if (m_kind != M_NONE && m_deadline >= 0.0 &&
+		    now >= m_deadline)
+			main_expire();
+		if (b_active && b_deadline >= 0.0 && now >= b_deadline) {
+			bar_hide();
+			b_active = 0;
 		}
-		buf[n] = '\0';
-		if (parse_show(buf, &req) != 0)
-			continue;
-		show_cycle(&req, sock);
+		service_x();
 	}
 
 	return (0);
@@ -272,7 +274,7 @@ int
 show_once(const struct show_req *req)
 {
 	struct icon *ic;
-	double deadline, hold;
+	double mdl, bdl = 0.0, hold;
 
 	hold = req->hold;
 	if (hold != -1.0 && hold <= 0.0)
@@ -288,19 +290,40 @@ show_once(const struct show_req *req)
 		return (1);
 	}
 	paint_icon(ic, req);
+	if (req->gauge >= 0) {
+		bar_show(req);
+		bdl = req->gauge_hold < 0.0 ? -1.0 :
+		    now_monotonic() + req->gauge_hold;
+	}
 
-	/* Indefinite hold ends via SIGINT/SIGTERM -> cleanup(). */
-	deadline = hold < 0.0 ? -1.0 : now_monotonic() + hold;
-	while (deadline < 0.0 || now_monotonic() < deadline) {
+	/*
+	 * Glyph and gauge expire on their own holds; indefinite (-1)
+	 * ends via SIGINT/SIGTERM -> cleanup().  A deadline of 0
+	 * marks a slot already down.
+	 */
+	mdl = hold < 0.0 ? -1.0 : now_monotonic() + hold;
+	while (mdl != 0.0 || bdl != 0.0) {
+		double now = now_monotonic();
+
+		if (mdl != 0.0 && mdl >= 0.0 && now >= mdl) {
+			hide_overlay();
+			mdl = 0.0;
+		}
+		if (bdl != 0.0 && bdl >= 0.0 && now >= bdl) {
+			bar_hide();
+			bdl = 0.0;
+		}
+		if (mdl == 0.0 && bdl == 0.0)
+			break;
 		while (XPending(dpy) > 0) {
 			XEvent ev;
 			XNextEvent(dpy, &ev);
-			if (ev.type == Expose && ev.xexpose.count == 0)
+			if (ev.type == Expose && ev.xexpose.count == 0 &&
+			    mdl != 0.0)
 				paint_icon(ic, req);
 		}
 		poll(NULL, 0, 50);
 	}
-	hide_overlay();
 	cleanup(0);
 	return (0);
 }

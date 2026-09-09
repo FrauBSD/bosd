@@ -15,11 +15,14 @@
 
 #include <X11/Xlib.h>
 
-#define BOSD_VERSION	"1.0"
+#define BOSD_VERSION	"2.0"
 
 #define BOSD_SPEC_MAX	1024	/* icon spec (path or bare name) */
 #define BOSD_BADGE_MAX	32	/* superscript label */
 #define BOSD_CAPTION_MAX 64	/* caption above/below the artwork */
+#define BOSD_COLOR_MAX	32	/* gauge color spec */
+#define BOSD_GAUGE_DEF	"#2AC12A"	/* default gauge green */
+#define BOSD_GAUGE_HOLD_DEF 3.0	/* default gauge hold */
 #define BOSD_MSG_MAX	1664	/* show datagram, captions escaped */
 #define BOSD_HOLD_DEF	2.0
 #define BOSD_HOLD_MIN	0.01
@@ -47,6 +50,9 @@ struct show_req {
 	int	 count;		/* > 0: countdown show, not an icon */
 	int	 text;		/* spec is text to render, not an icon */
 	int	 clear;		/* hide the active render, show nothing */
+	int	 gauge;		/* >= 0: bar show percentage; -1 none */
+	double	 gauge_hold;	/* the bar's own hold */
+	char	 color[BOSD_COLOR_MAX];	/* gauge fill color */
 	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
@@ -88,6 +94,12 @@ void	 badge_cleanup(void);
 /* png.c */
 struct icon	*icon_lookup(const char *spec, double scale, int outline);
 void		 icon_cache_clear(void);
+
+/* bar.c */
+int	 bar_show(const struct show_req *);
+void	 bar_hide(void);
+void	 bar_cleanup(void);
+int	 run_bar(const struct show_req *);
 
 /* ipc.c */
 extern char	 sock_name[104];

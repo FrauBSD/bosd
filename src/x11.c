@@ -29,7 +29,7 @@ static GC gc;
 static int scr_depth = 32;
 static int win_x, win_y;
 
-/* XRender ARGB32 is premultiplied; color rides under its alpha. */
+/* XRender ARGB32 is premultiplied; scale each color by its alpha. */
 static uint32_t
 pack_argb32(unsigned char r, unsigned char g, unsigned char b,
     unsigned char a)
@@ -216,7 +216,7 @@ place_window(int x, int y, int w, int h)
 
 /*
  * Size the window as artwork plus padding -- extra top/right room when
- * a badge rides along (more for a wide label) -- and place it so the
+ * a badge is present (more for a wide label) -- and place it so the
  * artwork, not the window, is centered on the panel, shifted by the
  * requested vertical offset (positive down).  Returns 1 when the show
  * lies entirely past a panel edge (nothing to paint).
@@ -443,6 +443,7 @@ void
 x11_cleanup(void)
 {
 	badge_cleanup();
+	bar_cleanup();
 	if (dpy != NULL && gc != None) {
 		XFreeGC(dpy, gc);
 		gc = None;

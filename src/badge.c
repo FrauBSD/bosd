@@ -1,6 +1,6 @@
 /*
- * Xft text riding an icon show: the superscript badge at the glyph's
- * upper-right, and captions above/below the artwork.
+ * Xft text beside the artwork: the superscript badge at the glyph's
+ * upper-right, and captions above/below.
  */
 #include <stdio.h>
 #include <string.h>

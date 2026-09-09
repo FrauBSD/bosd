@@ -2,13 +2,17 @@
 
 On-screen display engine for BSD desktops.
 
-`bosd` paints PNG glyphs (media-key feedback, mode toggles, status
-icons), giant countdown digits, and short outlined text (e.g. a
-checkmark) in a centered, click-through ARGB32 overlay on the
-primary or internal panel. A warm daemon per channel owns the
-window and replaces the visible show in place, so rapid toggles
-never flash. Clients are one-line socket sends with a painted
-fallback when no daemon runs.
+`bosd` flashes transient, click-through feedback over the desktop,
+the kind a desktop environment shows for media keys and hotkeys: a
+PNG glyph, giant countdown digits, or short outlined text (e.g. a
+checkmark) in a centered ARGB32 overlay on the primary or internal
+panel, plus a gauge bar (the classic xosd tick look) for
+volume/brightness levels. A warm daemon per channel keeps
+everything on screen and repaints in place, so rapid toggles
+never flash; the gauge and the artwork run independent timers and
+coexist. When a daemon is warm, a client invocation hands off the
+request and returns immediately; without one, the same command
+draws the OSD itself.
 
 Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
 
@@ -43,6 +47,9 @@ bosd -n shot -C                         # clear the channel's active render
 bosd -D audio-speakers 1                # render directly, skip the daemon
 bosd -p 'Shutdown in' -b s -c 10        # caption over a 10 s countdown
 bosd -n airplane -a 'airplane mode off' airplane-off  # caption below
+bosd -n volume -g 45                    # gauge bar, 45%, default green
+bosd -n volume -g 115 -G '#CC2222'      # red bar, "115%" past its edge
+bosd -g 45 -G red -B 3 audio-headphones # glyph + bar, each its own hold
 
 bosd /path/to/glyph.png          # one-shot, absolute path
 ```
@@ -57,9 +64,10 @@ ships none.
   `bosd` composites true-color PNG art with real alpha via XRender.
 - **nbosd** shows battery and CPU frequency; fixed purpose. `bosd`
   shows whatever glyph you send it; policy lives in the caller.
-- **xob** is a bar; **dunst**/notify-osd are D-Bus notification
-  queues. `bosd` is neither: no bus, no queue, no daemon config --
-  one datagram, one glyph.
+- **xob** is only a bar; **dunst**/notify-osd are D-Bus
+  notification queues. `bosd` has a gauge bar (the classic xosd
+  tick look) beside its glyphs, with no bus, no queue, no daemon
+  config -- one datagram, one OSD.
 - Libraries (libxosd, libaosd) want a C caller. `bosd` is a shell
   one-liner, warm-daemon fast: repeated toggles repaint in place,
   no flash, no respawn.
