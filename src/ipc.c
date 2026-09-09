@@ -2,7 +2,7 @@
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
  * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE OUTL CNT
- * SPEC [BADGE]" — HOLD in seconds, XOFF/YOFF signed shifts in pixels
+ * SPEC [BADGE]" -- HOLD in seconds, XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
  * show (SPEC then a placeholder) and -1 a text show (SPEC then the

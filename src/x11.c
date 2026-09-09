@@ -215,8 +215,8 @@ place_window(int x, int y, int w, int h)
 }
 
 /*
- * Size the window as artwork plus padding — extra top/right room when a
- * badge rides along (more for a wide label) — and place it so the
+ * Size the window as artwork plus padding -- extra top/right room when
+ * a badge rides along (more for a wide label) -- and place it so the
  * artwork, not the window, is centered on the panel, shifted by the
  * requested vertical offset (positive down).  Returns 1 when the show
  * lies entirely past a panel edge (nothing to paint).

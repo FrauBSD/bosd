@@ -1,11 +1,11 @@
 /*
- * bosd — on-screen display engine.
+ * bosd -- on-screen display engine.
  *
  * One daemon instance per OSD channel (per-UID datagram socket); clients
  * send "hold icon-spec" show requests.  Glyphs are PNG files, pre-scaled
  * to the internal panel and outlined, painted into a panel-centered
  * ARGB32 override-redirect window.  Replacing a mapped glyph overwrites
- * pixels in place — no unmap/remap flash.
+ * pixels in place (no unmap/remap flash).
  */
 #ifndef BOSD_H
 #define BOSD_H

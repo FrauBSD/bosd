@@ -1,5 +1,5 @@
 /*
- * bosd — on-screen display engine.  See bosd(1).
+ * bosd -- on-screen display engine.  See bosd(1).
  */
 #include <errno.h>
 #include <limits.h>

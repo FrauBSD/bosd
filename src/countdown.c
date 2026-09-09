@@ -1,5 +1,5 @@
 /*
- * Countdown show — the screenshot timer: huge outlined Xft digits on
+ * Countdown show (the screenshot timer): huge outlined Xft digits on
  * a full-panel overlay, one tick per hold.  Runs in the channel
  * daemon like any show, or in the invoking process when none does.
  */
@@ -165,9 +165,9 @@ ref_digit_extents(XGlyphInfo *ref)
 }
 
 /*
- * Largest tabular bold face that fits the panel with outline air —
- * width-checked against fit_text when given, the widest glyph slot
- * otherwise.
+ * Largest tabular bold face that fits the panel with outline air
+ * (width-checked against fit_text when given, the widest glyph slot
+ * otherwise).
  */
 static XftFont *
 open_fit_font(int screen, int w, int h, int *pointsize,

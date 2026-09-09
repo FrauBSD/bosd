@@ -12,7 +12,7 @@
 static XftFont *badge_font;
 static int badge_font_px = -1;
 
-/* Cache the face — XftFontOpenName/fontconfig can take seconds. */
+/* Cache the face (XftFontOpenName/fontconfig can take seconds). */
 static XftFont *
 open_badge_font(int screen, int pixelsize)
 {

@@ -2,8 +2,8 @@
 
 On-screen display engine for BSD desktops.
 
-`bosd` paints PNG glyphs — media-key feedback, mode toggles, status
-icons — in a centered, click-through ARGB32 overlay on the internal
+`bosd` paints PNG glyphs (media-key feedback, mode toggles, status
+icons) in a centered, click-through ARGB32 overlay on the internal
 panel. A warm daemon per channel owns the window and replaces the
 visible glyph in place, so rapid toggles never flash. Clients are
 one-line socket sends with a painted fallback when no daemon runs.
@@ -46,12 +46,12 @@ ships none.
 
 ## Why another OSD?
 
-- **xosd** draws text through shaped windows — the green TV/VCR look.
+- **xosd** draws text through shaped windows (the green TV/VCR look).
   `bosd` composites true-color PNG art with real alpha via XRender.
 - **nbosd** shows battery and CPU frequency; fixed purpose. `bosd`
   shows whatever glyph you send it; policy lives in the caller.
 - **xob** is a bar; **dunst**/notify-osd are D-Bus notification
-  queues. `bosd` is neither: no bus, no queue, no daemon config —
+  queues. `bosd` is neither: no bus, no queue, no daemon config --
   one datagram, one glyph.
 - Libraries (libxosd, libaosd) want a C caller. `bosd` is a shell
   one-liner, warm-daemon fast: repeated toggles repaint in place,
