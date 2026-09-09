@@ -1,5 +1,6 @@
 /*
- * Superscript badge: Xft text at the glyph's upper-right.
+ * Xft text riding an icon show: the superscript badge at the glyph's
+ * upper-right, and captions above/below the artwork.
  */
 #include <stdio.h>
 #include <string.h>
@@ -9,23 +10,23 @@
 
 #include "bosd.h"
 
-static XftFont *badge_font;
-static int badge_font_px = -1;
+static XftFont *badge_font, *cap_font;
+static int badge_font_px = -1, cap_font_px = -1;
 
 /* Cache the face (XftFontOpenName/fontconfig can take seconds). */
 static XftFont *
-open_badge_font(int screen, int pixelsize)
+open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
 {
 	char pattern[256];
 	XftFont *font;
 	const char *file = "/usr/local/share/fonts/dejavu/DejaVuSans-Bold.ttf";
 
-	if (badge_font != NULL && badge_font_px == pixelsize)
-		return (badge_font);
-	if (badge_font != NULL) {
-		XftFontClose(dpy, badge_font);
-		badge_font = NULL;
-		badge_font_px = -1;
+	if (*slot != NULL && *slot_px == pixelsize)
+		return (*slot);
+	if (*slot != NULL) {
+		XftFontClose(dpy, *slot);
+		*slot = NULL;
+		*slot_px = -1;
 	}
 
 	snprintf(pattern, sizeof(pattern),
@@ -41,9 +42,29 @@ open_badge_font(int screen, int pixelsize)
 		    "Sans:bold:pixelsize=%d:antialias=true", pixelsize);
 		font = XftFontOpenName(dpy, screen, pattern);
 	}
-	badge_font = font;
-	badge_font_px = (font != NULL) ? pixelsize : -1;
+	*slot = font;
+	*slot_px = (font != NULL) ? pixelsize : -1;
 	return (font);
+}
+
+/* White fill ringed by a black outline. */
+static void
+outlined_string(XftDraw *draw, XftFont *font, int x, int y,
+    const char *text, int tlen, int stroke, XftColor *fg, XftColor *bg)
+{
+	int dx, dy;
+
+	for (dy = -stroke; dy <= stroke; dy++) {
+		for (dx = -stroke; dx <= stroke; dx++) {
+			if (dx == 0 && dy == 0)
+				continue;
+			if (dx * dx + dy * dy > stroke * stroke + stroke)
+				continue;
+			XftDrawStringUtf8(draw, bg, font, x + dx, y + dy,
+			    (FcChar8 *)text, tlen);
+		}
+	}
+	XftDrawStringUtf8(draw, fg, font, x, y, (FcChar8 *)text, tlen);
 }
 
 /*
@@ -57,7 +78,7 @@ draw_badge(const struct icon *ic, const char *text)
 	XftDraw *draw;
 	XftColor fg, bg;
 	XGlyphInfo ext;
-	int screen, pixelsize, stroke, dx, dy, text_x, text_y;
+	int screen, pixelsize, stroke, text_x, text_y;
 	int target_h, tlen;
 
 	if (text == NULL || text[0] == '\0')
@@ -74,7 +95,7 @@ draw_badge(const struct icon *ic, const char *text)
 		target_h = 109;
 	pixelsize = target_h;
 
-	font = open_badge_font(screen, pixelsize);
+	font = open_face(screen, pixelsize, &badge_font, &badge_font_px);
 	if (font == NULL)
 		return;
 
@@ -106,19 +127,92 @@ draw_badge(const struct icon *ic, const char *text)
 		stroke = 3;
 	if (stroke > 8)
 		stroke = 8;
-	for (dy = -stroke; dy <= stroke; dy++) {
-		for (dx = -stroke; dx <= stroke; dx++) {
-			if (dx == 0 && dy == 0)
-				continue;
-			if (dx * dx + dy * dy > stroke * stroke + stroke)
-				continue;
-			XftDrawStringUtf8(draw, &bg, font, text_x + dx,
-			    text_y + dy, (FcChar8 *)text, tlen);
-		}
-	}
-	XftDrawStringUtf8(draw, &fg, font, text_x, text_y, (FcChar8 *)text,
-	    tlen);
+	outlined_string(draw, font, text_x, text_y, text, tlen, stroke,
+	    &fg, &bg);
 
+	XftColorFree(dpy, visual, cmap, &fg);
+	XftColorFree(dpy, visual, cmap, &bg);
+	XftDrawDestroy(draw);
+}
+
+/* Caption sizing shared by layout (reserve room) and paint. */
+int
+caption_px(const struct icon *ic)
+{
+	int px = (ic->h * 14) / 100;
+
+	if (px < 28)
+		px = 28;
+	if (px > 64)
+		px = 64;
+	return (px);
+}
+
+int
+caption_gap(void)
+{
+	int gap = icon_px / 24;
+
+	return (gap < 8 ? 8 : gap);
+}
+
+void
+caption_measure(const char *text, int px, int *w, int *h)
+{
+	XftFont *font;
+	XGlyphInfo ext;
+
+	*w = 0;
+	*h = 0;
+	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px);
+	if (font == NULL)
+		return;
+	XftTextExtentsUtf8(dpy, font, (FcChar8 *)text, (int)strlen(text),
+	    &ext);
+	*w = (int)ext.width;
+	*h = font->ascent + font->descent;
+}
+
+/* Centered caption; anchor_y is the artwork edge it hangs off. */
+void
+draw_caption(const char *text, int px, int anchor_y, int below)
+{
+	XftFont *font;
+	XftDraw *draw;
+	XftColor fg, bg;
+	XGlyphInfo ext;
+	int tlen, x, y, stroke;
+
+	if (text == NULL || text[0] == '\0')
+		return;
+	tlen = (int)strlen(text);
+	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px);
+	if (font == NULL)
+		return;
+
+	XftTextExtentsUtf8(dpy, font, (FcChar8 *)text, tlen, &ext);
+	x = (win_w - (int)ext.width) / 2 + ext.x;
+	if (x < 4)
+		x = 4;
+	if (below)
+		y = anchor_y + caption_gap() + font->ascent;
+	else
+		y = anchor_y - caption_gap() - font->descent;
+
+	draw = XftDrawCreate(dpy, win, visual, cmap);
+	if (draw == NULL)
+		return;
+	if (!XftColorAllocName(dpy, visual, cmap, "black", &bg) ||
+	    !XftColorAllocName(dpy, visual, cmap, "white", &fg)) {
+		XftDrawDestroy(draw);
+		return;
+	}
+	stroke = px / 14;
+	if (stroke < 2)
+		stroke = 2;
+	if (stroke > 6)
+		stroke = 6;
+	outlined_string(draw, font, x, y, text, tlen, stroke, &fg, &bg);
 	XftColorFree(dpy, visual, cmap, &fg);
 	XftColorFree(dpy, visual, cmap, &bg);
 	XftDrawDestroy(draw);
@@ -131,5 +225,10 @@ badge_cleanup(void)
 		XftFontClose(dpy, badge_font);
 		badge_font = NULL;
 		badge_font_px = -1;
+	}
+	if (dpy != NULL && cap_font != NULL) {
+		XftFontClose(dpy, cap_font);
+		cap_font = NULL;
+		cap_font_px = -1;
 	}
 }

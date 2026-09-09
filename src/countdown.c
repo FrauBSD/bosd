@@ -16,10 +16,10 @@
 
 #include "bosd.h"
 
-static XftFont	*font, *bfont;
+static XftFont	*font, *bfont, *cfont;
 static XftDraw	*draw;
 static XftColor	 fg, bg;
-static int	 stroke;
+static int	 stroke, cstroke;
 static int	 lock_len, lock_x, lock_bx;
 static char	 text_buf[BOSD_SPEC_MAX];
 
@@ -229,6 +229,32 @@ draw_outlined(XftFont *f, int x, int y, const char *text, int s)
 	XftDrawStringUtf8(draw, &fg, f, x, y, (const FcChar8 *)text, len);
 }
 
+/* Captions above/below the main content; y is its baseline. */
+static void
+draw_caps(const struct show_req *req, int y)
+{
+	XGlyphInfo e;
+	int cx, cy, gap;
+
+	if (cfont == NULL)
+		return;
+	gap = stroke * 2 + 16;
+	if (req->prefix[0] != '\0') {
+		XftTextExtentsUtf8(dpy, cfont, (const FcChar8 *)req->prefix,
+		    (int)strlen(req->prefix), &e);
+		cx = (win_w - (int)e.width) / 2 + e.x + req->x_off;
+		cy = y - font->ascent - gap - cfont->descent;
+		draw_outlined(cfont, cx, cy, req->prefix, cstroke);
+	}
+	if (req->append[0] != '\0') {
+		XftTextExtentsUtf8(dpy, cfont, (const FcChar8 *)req->append,
+		    (int)strlen(req->append), &e);
+		cx = (win_w - (int)e.width) / 2 + e.x + req->x_off;
+		cy = y + font->descent + gap + cfont->ascent;
+		draw_outlined(cfont, cx, cy, req->append, cstroke);
+	}
+}
+
 /* Size the overlay to the panel and stand up fonts, draw, colors. */
 int
 countdown_begin(const struct show_req *req)
@@ -260,6 +286,17 @@ countdown_begin(const struct show_req *req)
 		    "DejaVu Sans:bold:size=%d:antialias=true",
 		    bps < 16 ? 16 : bps);
 		bfont = XftFontOpenName(dpy, screen, pattern);
+	}
+	if (req->prefix[0] != '\0' || req->append[0] != '\0') {
+		char pattern[128];
+		int cps = pointsize * 12 / 100;
+
+		snprintf(pattern, sizeof(pattern),
+		    "DejaVu Sans:bold:size=%d:antialias=true",
+		    cps < 20 ? 20 : cps);
+		cfont = XftFontOpenName(dpy, screen, pattern);
+		cstroke = stroke > 0 ?
+		    (stroke / 4 < 2 ? 2 : stroke / 4) : 0;
 	}
 
 	draw = XftDrawCreate(dpy, win, visual, cmap);
@@ -322,6 +359,7 @@ countdown_tick(const struct show_req *req, int digit)
 		    (stroke / 3 < 3 ? 3 : stroke / 3) : 0;
 		draw_outlined(bfont, bx, by, req->badge, bstroke);
 	}
+	draw_caps(req, y);
 	XFlush(dpy);
 }
 
@@ -352,6 +390,7 @@ text_tick(const struct show_req *req)
 		    (stroke / 3 < 3 ? 3 : stroke / 3) : 0;
 		draw_outlined(bfont, bx, by, req->badge, bstroke);
 	}
+	draw_caps(req, y);
 	XFlush(dpy);
 }
 
@@ -367,6 +406,10 @@ countdown_end(void)
 	if (bfont != NULL) {
 		XftFontClose(dpy, bfont);
 		bfont = NULL;
+	}
+	if (cfont != NULL) {
+		XftFontClose(dpy, cfont);
+		cfont = NULL;
 	}
 	if (font != NULL) {
 		XftFontClose(dpy, font);

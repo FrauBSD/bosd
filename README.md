@@ -41,6 +41,8 @@ bosd -n shot -t '\u2713' 1              # big checkmark (escapes decode)
 bosd -n audio audio-speakers -1         # hold until -C, replaced, or ^C
 bosd -n shot -C                         # clear the channel's active render
 bosd -D audio-speakers 1                # render directly, skip the daemon
+bosd -p 'Shutdown in' -b s -c 10        # caption over a 10 s countdown
+bosd -n airplane -a 'airplane mode off' airplane-off  # caption below
 
 bosd /path/to/glyph.png          # one-shot, absolute path
 ```

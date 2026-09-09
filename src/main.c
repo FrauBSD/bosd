@@ -17,18 +17,28 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-h] [-n instance] { -d | -C }\n"
-	    "       bosd [-Dho] [-n instance] [-b badge] [-s scale] "
-	    "[-x offset] \\\n"
-	    "            [-y offset] { icon | -c countdown | -t text } "
+	    "       bosd [-Dho] [-n instance] [-a text] [-b badge] "
+	    "[-p text] \\\n"
+	    "            [-s scale] [-x offset] [-y offset] \\\n"
+	    "            { icon | -c countdown | -t text } "
 	    "[hold_seconds]\n");
 	exit(1);
+}
+
+/* Interpret escapes in a display-text field before local render. */
+static void
+decode_field(char *s, size_t size)
+{
+	char tmp[BOSD_SPEC_MAX];
+
+	decode_escapes(s, tmp, sizeof(tmp));
+	strlcpy(s, tmp, size);
 }
 
 int
 main(int argc, char **argv)
 {
 	struct show_req req;
-	char badge_dec[BOSD_BADGE_MAX];
 	int ch, count = 0, Cflag = 0, Dflag = 0, dflag = 0, tflag = 0;
 
 	memset(&req, 0, sizeof(req));
@@ -36,10 +46,19 @@ main(int argc, char **argv)
 	req.scale = 1.0;
 	req.outline = 1;
 
-	while ((ch = getopt(argc, argv, "CDb:c:dhn:os:tx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "CDa:b:c:dhn:op:s:tx:y:")) != -1) {
 		switch (ch) {
 		case 'C':
 			Cflag = 1;
+			break;
+		case 'a':
+			if (strlen(optarg) >= sizeof(req.append)) {
+				fprintf(stderr, "bosd: -a text must be "
+				    "at most %zu characters\n",
+				    sizeof(req.append) - 1);
+				usage();
+			}
+			strlcpy(req.append, optarg, sizeof(req.append));
 			break;
 		case 'D':
 			Dflag = 1;	/* render directly, skip daemon */
@@ -80,6 +99,15 @@ main(int argc, char **argv)
 			break;
 		case 'o':
 			req.outline = 0;
+			break;
+		case 'p':
+			if (strlen(optarg) >= sizeof(req.prefix)) {
+				fprintf(stderr, "bosd: -p text must be "
+				    "at most %zu characters\n",
+				    sizeof(req.prefix) - 1);
+				usage();
+			}
+			strlcpy(req.prefix, optarg, sizeof(req.prefix));
 			break;
 		case 's':
 			req.scale = atof(optarg);
@@ -123,7 +151,8 @@ main(int argc, char **argv)
 			usage();
 		}
 		if (Dflag || argc != 0 || count != 0 || tflag ||
-		    req.badge[0] != '\0' || req.scale != 1.0 ||
+		    req.badge[0] != '\0' || req.prefix[0] != '\0' ||
+		    req.append[0] != '\0' || req.scale != 1.0 ||
 		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
 		if (dflag)
@@ -185,8 +214,9 @@ main(int argc, char **argv)
 		}
 		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
-		decode_escapes(req.badge, badge_dec, sizeof(badge_dec));
-		strlcpy(req.badge, badge_dec, sizeof(req.badge));
+		decode_field(req.badge, sizeof(req.badge));
+		decode_field(req.prefix, sizeof(req.prefix));
+		decode_field(req.append, sizeof(req.append));
 		return (tflag ? run_text(&req) : run_countdown(&req));
 	}
 
@@ -205,7 +235,8 @@ main(int argc, char **argv)
 	if (!Dflag && daemon_alive() && send_show(&req) == 0)
 		return (0);
 
-	decode_escapes(req.badge, badge_dec, sizeof(badge_dec));
-	strlcpy(req.badge, badge_dec, sizeof(req.badge));
+	decode_field(req.badge, sizeof(req.badge));
+	decode_field(req.prefix, sizeof(req.prefix));
+	decode_field(req.append, sizeof(req.append));
 	return (show_once(&req));
 }

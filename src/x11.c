@@ -225,7 +225,7 @@ static int
 layout_window(const struct icon *ic, const struct show_req *req)
 {
 	int pad_left, pad_right, pad_top, pad_bot;
-	int blen, w, h, x, y;
+	int blen, w, h, x, y, cap_w, cw, ch;
 
 	blen = (int)strlen(req->badge);
 	pad_left = icon_px / 12;
@@ -249,10 +249,29 @@ layout_window(const struct icon *ic, const struct show_req *req)
 		pad_top = icon_px / 12;
 	}
 
+	/* Captions reserve a line above/below and may widen the window. */
+	cap_w = 0;
+	if (req->prefix[0] != '\0') {
+		caption_measure(req->prefix, caption_px(ic), &cw, &ch);
+		pad_top += ch + caption_gap();
+		if (cw > cap_w)
+			cap_w = cw;
+	}
+	if (req->append[0] != '\0') {
+		caption_measure(req->append, caption_px(ic), &cw, &ch);
+		pad_bot += ch + caption_gap();
+		if (cw > cap_w)
+			cap_w = cw;
+	}
+
 	icon_ox = pad_left;
 	icon_oy = pad_top;
 	w = ic->w + pad_left + pad_right;
 	h = ic->h + pad_top + pad_bot;
+	if (cap_w + 16 > w) {
+		icon_ox += (cap_w + 16 - w) / 2;
+		w = cap_w + 16;
+	}
 	x = scr_x + scr_w / 2 - (icon_ox + ic->w / 2) + req->x_off;
 	y = scr_y + scr_h / 2 - (icon_oy + ic->h / 2) + req->y_off;
 	/* Offset shows are deliberate: only clamp plain centering. */
@@ -383,6 +402,11 @@ paint_icon(const struct icon *ic, const struct show_req *req)
 	XClearWindow(dpy, win);
 	paint_rgba(ic->rgba, ic->w, ic->h);
 	draw_badge(ic, req->badge);
+	if (req->prefix[0] != '\0')
+		draw_caption(req->prefix, caption_px(ic), icon_oy, 0);
+	if (req->append[0] != '\0')
+		draw_caption(req->append, caption_px(ic),
+		    icon_oy + ic->h, 1);
 	XSync(dpy, False);
 }
 

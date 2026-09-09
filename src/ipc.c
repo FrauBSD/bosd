@@ -2,15 +2,16 @@
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
  * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE OUTL CNT
- * SPEC [BADGE]" -- HOLD in seconds (-1 holds until replaced or
- * cleared), XOFF/YOFF signed shifts in pixels
+ * PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until replaced
+ * or cleared), XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
  * show (SPEC then a placeholder) and -1 a text show (SPEC then the
- * text, escapes still encoded), SPEC otherwise an absolute path or
- * a bare name resolved against BOSD_PATH / the compiled share
- * directory (".png" appended when missing).  A bare "CLEAR" hides
- * the active render.
+ * text, escapes still encoded), PFX/APX captions above/below ("-"
+ * when absent, whitespace escaped in flight), SPEC otherwise an
+ * absolute path or a bare name resolved against BOSD_PATH / the
+ * compiled share directory (".png" appended when missing).  A bare
+ * "CLEAR" hides the active render.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,14 +89,37 @@ send_dgram(const char *msg)
 	return (n < 0 ? -1 : 0);
 }
 
+/* Escape whitespace so a caption travels as one datagram token. */
+static void
+encode_ws(const char *in, char *out, size_t outlen)
+{
+	size_t o = 0;
+
+	if (*in == '\0')
+		in = "-";	/* absent-field placeholder */
+	while (*in != '\0' && o + 5 < outlen) {
+		if (*in == ' ' || *in == '\t' || *in == '\n') {
+			snprintf(out + o, outlen - o, "\\x%02x",
+			    (unsigned char)*in);
+			o += 4;
+			in++;
+		} else
+			out[o++] = *in++;
+	}
+	out[o] = '\0';
+}
+
 int
 send_show(const struct show_req *req)
 {
 	char msg[BOSD_MSG_MAX];
+	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 
-	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s%s%s",
+	encode_ws(req->prefix, pfx, sizeof(pfx));
+	encode_ws(req->append, apx, sizeof(apx));
+	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s %s %s%s%s",
 	    req->hold, req->x_off, req->y_off, req->scale, req->outline,
-	    req->text ? -1 : req->count,
+	    req->text ? -1 : req->count, pfx, apx,
 	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
 	return (send_dgram(msg));
@@ -113,6 +137,7 @@ parse_show(const char *buf, struct show_req *req)
 	double hold, scale;
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
+	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 	int n, x_off, y_off, outline, count;
 
 	if (strcmp(buf, "CLEAR") == 0) {
@@ -122,10 +147,11 @@ parse_show(const char *buf, struct show_req *req)
 	}
 
 	badge[0] = '\0';
-	/* Field widths track BOSD_SPEC_MAX / BOSD_BADGE_MAX. */
-	n = sscanf(buf, "%lf %d %d %lf %d %d %1023s %31s", &hold, &x_off,
-	    &y_off, &scale, &outline, &count, name, badge);
-	if (n < 7)
+	/* Field widths track BOSD_SPEC/BADGE/CAPTION_MAX (escaped x4). */
+	n = sscanf(buf, "%lf %d %d %lf %d %d %255s %255s %1023s %31s",
+	    &hold, &x_off, &y_off, &scale, &outline, &count, pfx, apx,
+	    name, badge);
+	if (n < 9)
 		return (-1);
 	if (hold != -1.0 && hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
@@ -142,8 +168,16 @@ parse_show(const char *buf, struct show_req *req)
 	req->x_off = x_off;
 	req->y_off = y_off;
 	strlcpy(req->spec, name, sizeof(req->spec));
-	/* Badge is always display text: decode escapes on arrival. */
+	/* Display text: decode escapes on arrival; "-" means absent. */
 	decode_escapes(badge, req->badge, sizeof(req->badge));
+	if (strcmp(pfx, "-") == 0)
+		req->prefix[0] = '\0';
+	else
+		decode_escapes(pfx, req->prefix, sizeof(req->prefix));
+	if (strcmp(apx, "-") == 0)
+		req->append[0] = '\0';
+	else
+		decode_escapes(apx, req->append, sizeof(req->append));
 	return (0);
 }
 

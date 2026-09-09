@@ -17,7 +17,9 @@
 .Nm
 .Op Fl Dho
 .Op Fl n Ar instance
+.Op Fl a Ar text
 .Op Fl b Ar badge
+.Op Fl p Ar text
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
@@ -42,6 +44,15 @@ in place, so rapid key repeats never flash.
 .Pp
 The options are as follows:
 .Bl -tag -width "-n instance"
+.It Fl a Ar text
+Caption below the artwork: a smaller outlined line under the
+glyph, digits, or text, e.g.
+.Dq airplane mode off
+under the airplane glyph.
+Escapes decode as with
+.Fl t ;
+literal whitespace is permitted.
+At most 63 characters before decoding.
 .It Fl b Ar badge
 Draw
 .Ar badge
@@ -100,6 +111,14 @@ Independent channels own independent windows and sockets.
 Skip the black outline normally drawn behind the glyph for
 legibility on any wallpaper.
 Suited to full-color artwork that carries its own contrast.
+.It Fl p Ar text
+Caption above the artwork, otherwise as
+.Fl a ,
+e.g.
+.Dq Shutdown in
+over a countdown, with
+.Fl b Li s
+marking seconds.
 .It Fl s Ar scale
 Multiply the panel-derived render size by
 .Ar scale
@@ -223,6 +242,17 @@ bosd -n shot -t '\eu2713' 1
 Clear whatever the channel is showing:
 .Bd -literal -offset indent
 bosd -n shot -C
+.Ed
+.Pp
+Shutdown warning: caption over a 10-second countdown, badge
+marking seconds:
+.Bd -literal -offset indent
+bosd -n power -p 'Shutdown in' -b s -c 10
+.Ed
+.Pp
+Caption a glyph:
+.Bd -literal -offset indent
+bosd -n airplane -a 'airplane mode off' airplane-off
 .Ed
 .Sh SEE ALSO
 .Xr xrandr 1

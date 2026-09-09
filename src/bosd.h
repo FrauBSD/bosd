@@ -17,7 +17,8 @@
 
 #define BOSD_SPEC_MAX	1024	/* icon spec (path or bare name) */
 #define BOSD_BADGE_MAX	32	/* superscript label */
-#define BOSD_MSG_MAX	1160	/* "hold spec [badge]" datagram */
+#define BOSD_CAPTION_MAX 64	/* caption above/below the artwork */
+#define BOSD_MSG_MAX	1664	/* show datagram, captions escaped */
 #define BOSD_HOLD_DEF	2.0
 #define BOSD_HOLD_MIN	0.01
 #define BOSD_HOLD_MAX	30.0
@@ -48,6 +49,8 @@ struct show_req {
 	int	 y_off;		/* vertical shift: positive down */
 	char	 spec[BOSD_SPEC_MAX];
 	char	 badge[BOSD_BADGE_MAX];
+	char	 prefix[BOSD_CAPTION_MAX];	/* caption above */
+	char	 append[BOSD_CAPTION_MAX];	/* caption below */
 };
 
 /* main.c */
@@ -74,6 +77,10 @@ void	 x11_cleanup(void);
 
 /* badge.c */
 void	 draw_badge(const struct icon *, const char *text);
+int	 caption_px(const struct icon *);
+int	 caption_gap(void);
+void	 caption_measure(const char *text, int px, int *w, int *h);
+void	 draw_caption(const char *text, int px, int anchor_y, int below);
 void	 badge_cleanup(void);
 
 /* png.c */
