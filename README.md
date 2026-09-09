@@ -40,6 +40,7 @@ bosd -c 3                               # full-screen 3-2-1 countdown
 bosd -n shot -t '\u2713' 1              # big checkmark (escapes decode)
 bosd -n audio audio-speakers -1         # hold until -C, replaced, or ^C
 bosd -n shot -C                         # clear the channel's active render
+bosd -D audio-speakers 1                # render directly, skip the daemon
 
 bosd /path/to/glyph.png          # one-shot, absolute path
 ```

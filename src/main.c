@@ -17,7 +17,7 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-h] [-n instance] { -d | -C }\n"
-	    "       bosd [-ho] [-n instance] [-b badge] [-s scale] "
+	    "       bosd [-Dho] [-n instance] [-b badge] [-s scale] "
 	    "[-x offset] \\\n"
 	    "            [-y offset] { icon | -c countdown | -t text } "
 	    "[hold_seconds]\n");
@@ -29,17 +29,20 @@ main(int argc, char **argv)
 {
 	struct show_req req;
 	char badge_dec[BOSD_BADGE_MAX];
-	int ch, count = 0, Cflag = 0, dflag = 0, tflag = 0;
+	int ch, count = 0, Cflag = 0, Dflag = 0, dflag = 0, tflag = 0;
 
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.outline = 1;
 
-	while ((ch = getopt(argc, argv, "Cb:c:dhn:os:tx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "CDb:c:dhn:os:tx:y:")) != -1) {
 		switch (ch) {
 		case 'C':
 			Cflag = 1;
+			break;
+		case 'D':
+			Dflag = 1;	/* render directly, skip daemon */
 			break;
 		case 'b':
 			if (strlen(optarg) >= sizeof(req.badge) ||
@@ -114,7 +117,12 @@ main(int argc, char **argv)
 	if (dflag || Cflag) {
 		if (dflag && Cflag)
 			usage();
-		if (argc != 0 || count != 0 || tflag ||
+		if (Dflag && Cflag) {
+			fprintf(stderr, "bosd: -D renders directly and "
+			    "cannot clear a daemon's show (-C)\n");
+			usage();
+		}
+		if (Dflag || argc != 0 || count != 0 || tflag ||
 		    req.badge[0] != '\0' || req.scale != 1.0 ||
 		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
@@ -175,7 +183,7 @@ main(int argc, char **argv)
 					req.hold = BOSD_HOLD_MAX;
 			}
 		}
-		if (daemon_alive() && send_show(&req) == 0)
+		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
 		decode_escapes(req.badge, badge_dec, sizeof(badge_dec));
 		strlcpy(req.badge, badge_dec, sizeof(req.badge));
@@ -194,7 +202,7 @@ main(int argc, char **argv)
 			req.hold = BOSD_HOLD_MAX;
 	}
 
-	if (daemon_alive() && send_show(&req) == 0)
+	if (!Dflag && daemon_alive() && send_show(&req) == 0)
 		return (0);
 
 	decode_escapes(req.badge, badge_dec, sizeof(badge_dec));

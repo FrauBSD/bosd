@@ -15,7 +15,7 @@
 .Op Fl n Ar instance
 .Bro Fl d | Fl C Brc
 .Nm
-.Op Fl ho
+.Op Fl Dho
 .Op Fl n Ar instance
 .Op Fl b Ar badge
 .Op Fl s Ar scale
@@ -81,6 +81,11 @@ and
 the badge rides the digits' upper right and
 .Fl s
 scales the digits.
+.It Fl D
+Render directly in the invoking process, ignoring any running
+channel daemon, and exit when the hold elapses.
+Useful for trying a show without disturbing what the daemon
+displays, or for pacing an animation from a script.
 .It Fl d
 Run as the display daemon for
 .Ar instance ,
