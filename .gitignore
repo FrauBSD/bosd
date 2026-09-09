@@ -2,4 +2,7 @@
 *.o
 __pycache__/
 bosd
+bosd.pc
 examples/*.png
+libbosd.so
+libbosd.so.*

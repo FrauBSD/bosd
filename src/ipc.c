@@ -15,6 +15,7 @@
  * "CLEAR" hides the active render(s).  A gauge travels separately
  * as "BAR HOLD XOFF YOFF PCT COLOR" and coexists with the artwork.
  */
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,31 +24,41 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 char sock_name[104];
 char pid_name[104];
 
 void
-resolve_ipc_names(void)
+bosd_paths(const char *channel, char *sock, size_t socklen, char *pidf,
+    size_t pidlen)
 {
 	uid_t u = getuid();
 
-	(void)snprintf(sock_name, sizeof(sock_name),
-	    "/tmp/bosd.%s.%u.sock", instance, (unsigned)u);
-	(void)snprintf(pid_name, sizeof(pid_name),
-	    "/tmp/bosd.%s.%u.pid", instance, (unsigned)u);
+	if (channel == NULL || channel[0] == '\0')
+		channel = "default";
+	(void)snprintf(sock, socklen, "/tmp/bosd.%s.%u.sock", channel,
+	    (unsigned)u);
+	(void)snprintf(pidf, pidlen, "/tmp/bosd.%s.%u.pid", channel,
+	    (unsigned)u);
+}
+
+void
+resolve_ipc_names(void)
+{
+	bosd_paths(instance, sock_name, sizeof(sock_name), pid_name,
+	    sizeof(pid_name));
 }
 
 int
-daemon_alive(void)
+daemon_alive_at(const char *sock, const char *pidf)
 {
 	FILE *f;
 	pid_t pid;
 
-	if (access(sock_name, F_OK) != 0)
+	if (access(sock, F_OK) != 0)
 		return (0);
-	f = fopen(pid_name, "r");
+	f = fopen(pidf, "r");
 	if (f == NULL)
 		return (0);
 	if (fscanf(f, "%d", (int *)&pid) != 1) {
@@ -56,6 +67,12 @@ daemon_alive(void)
 	}
 	fclose(f);
 	return (kill(pid, 0) == 0);
+}
+
+int
+daemon_alive(void)
+{
+	return (daemon_alive_at(sock_name, pid_name));
 }
 
 int
@@ -72,7 +89,7 @@ write_pid_file(void)
 }
 
 static int
-send_dgram(const char *msg)
+send_dgram(const char *sock, const char *msg)
 {
 	struct sockaddr_un addr;
 	int fd;
@@ -84,7 +101,7 @@ send_dgram(const char *msg)
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
-	strlcpy(addr.sun_path, sock_name, sizeof(addr.sun_path));
+	strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
 	n = sendto(fd, msg, strlen(msg), MSG_DONTWAIT,
 	    (struct sockaddr *)&addr, sizeof(addr));
 	close(fd);
@@ -112,7 +129,7 @@ encode_ws(const char *in, char *out, size_t outlen)
 }
 
 int
-send_show(const struct show_req *req)
+send_show_to(const char *sock, const struct show_req *req)
 {
 	char msg[BOSD_MSG_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
@@ -121,7 +138,7 @@ send_show(const struct show_req *req)
 		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s",
 		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
 		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF);
-		if (send_dgram(msg) != 0)
+		if (send_dgram(sock, msg) != 0)
 			return (-1);
 		/* Gauge alone, or artwork too? */
 		if (req->spec[0] == '\0' && req->count <= 0 &&
@@ -136,13 +153,25 @@ send_show(const struct show_req *req)
 	    req->tcolor[0] != '\0' ? req->tcolor : "-", pfx, apx,
 	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
-	return (send_dgram(msg));
+	return (send_dgram(sock, msg));
+}
+
+int
+send_show(const struct show_req *req)
+{
+	return (send_show_to(sock_name, req));
+}
+
+int
+send_clear_to(const char *sock)
+{
+	return (send_dgram(sock, "CLEAR"));
 }
 
 int
 send_clear(void)
 {
-	return (send_dgram("CLEAR"));
+	return (send_clear_to(sock_name));
 }
 
 int

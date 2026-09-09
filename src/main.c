@@ -8,9 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "bosd.h"
-
-char instance[64] = "default";
+#include "priv.h"
 
 static void
 usage(void)
@@ -160,10 +158,8 @@ main(int argc, char **argv)
 			break;
 		}
 		case 'n':
-			if (strlen(optarg) >= sizeof(instance) ||
-			    strchr(optarg, '/') != NULL)
+			if (bosd_set_instance(optarg) != 0)
 				usage();
-			strlcpy(instance, optarg, sizeof(instance));
 			break;
 		case 'o':
 			req.outline = 0;

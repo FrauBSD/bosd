@@ -1,71 +1,36 @@
 /*
- * bosd -- on-screen display engine.
- *
- * One daemon instance per OSD channel (per-UID datagram socket); clients
- * send "hold icon-spec" show requests.  Glyphs are PNG files, pre-scaled
- * to the internal panel and outlined, painted into a panel-centered
- * ARGB32 override-redirect window.  Replacing a mapped glyph overwrites
- * pixels in place (no unmap/remap flash).
+ * bosd -- private declarations for the daemon and CLI.
  */
-#ifndef BOSD_H
-#define BOSD_H
+#ifndef BOSD_PRIV_H
+#define BOSD_PRIV_H
 
 #include <signal.h>
 #include <stddef.h>
 
 #include <X11/Xlib.h>
 
-#define BOSD_VERSION	"3.2"
+#include <bosd.h>
 
-#define BOSD_SPEC_MAX	1024	/* icon spec (path or bare name) */
-#define BOSD_BADGE_MAX	32	/* superscript label */
-#define BOSD_CAPTION_MAX 64	/* caption above/below the artwork */
-#define BOSD_COLOR_MAX	32	/* gauge / small-text color spec */
-#define BOSD_GAUGE_DEF	"#2AC12A"	/* default gauge green */
-#define BOSD_GAUGE_HOLD_DEF 3.0	/* default gauge hold */
-#define BOSD_STEXT_DEF	"green"	/* default small-text color */
-#define BOSD_MSG_MAX	1696	/* show datagram, captions escaped */
-#define BOSD_HOLD_DEF	2.0
-#define BOSD_HOLD_MIN	0.01
-#define BOSD_HOLD_MAX	30.0
-#define BOSD_SCALE_MIN	0.1
-#define BOSD_SCALE_MAX	8.0
+#define BOSD_MSG_MAX	1696
 
 #ifndef BOSD_ICONDIR
 #define BOSD_ICONDIR	"/usr/local/share/bosd"
 #endif
 
+/* Internal name kept for the existing call sites. */
+#define show_req bosd_req
+
 struct icon {
 	struct icon	*next;
 	char		 path[BOSD_SPEC_MAX];
-	unsigned char	*rgba;		/* scaled, optionally outlined */
+	unsigned char	*rgba;
 	double		 scale;
 	int		 outline;
 	int		 w, h;
 };
 
-struct show_req {
-	double	 hold;
-	double	 scale;		/* multiplies the panel-derived size */
-	int	 outline;	/* black halo behind the glyph */
-	int	 count;		/* > 0: countdown show, not an icon */
-	int	 text;		/* spec is large text, not an icon */
-	int	 small;		/* spec is small caption text */
-	int	 clear;		/* hide the active render, show nothing */
-	int	 gauge;		/* >= 0: bar show percentage; -1 none */
-	double	 gauge_hold;	/* the bar's own hold */
-	char	 color[BOSD_COLOR_MAX];	/* gauge fill color */
-	char	 tcolor[BOSD_COLOR_MAX];	/* small-text color */
-	int	 x_off;		/* horizontal shift: positive right */
-	int	 y_off;		/* vertical shift: positive down */
-	char	 spec[BOSD_SPEC_MAX];
-	char	 badge[BOSD_BADGE_MAX];
-	char	 prefix[BOSD_CAPTION_MAX];	/* caption above */
-	char	 append[BOSD_CAPTION_MAX];	/* caption below */
-};
-
-/* main.c */
-extern char	 instance[64];
+/* Channel name shared with libbosd (bosd -n / bosd_set_instance). */
+extern char	 instance[BOSD_INSTANCE_MAX];
 
 /* x11.c */
 extern Display	*dpy;
@@ -115,16 +80,23 @@ int	 run_stext(const struct show_req *);
 extern char	 sock_name[104];
 extern char	 pid_name[104];
 
+void	 bosd_paths(const char *channel, char *sock, size_t socklen,
+	    char *pidf, size_t pidlen);
 void	 resolve_ipc_names(void);
 int	 daemon_alive(void);
+int	 daemon_alive_at(const char *sock, const char *pidf);
 int	 write_pid_file(void);
 int	 send_show(const struct show_req *);
+int	 send_show_to(const char *sock, const struct show_req *);
 int	 send_clear(void);
+int	 send_clear_to(const char *sock);
 int	 parse_show(const char *buf, struct show_req *);
 int	 icon_resolve(const char *spec, char *path, size_t pathlen);
 
-/* countdown.c */
+/* escape.c */
 void	 decode_escapes(const char *in, char *out, size_t outlen);
+
+/* countdown.c */
 int	 countdown_begin(const struct show_req *);
 void	 countdown_tick(const struct show_req *, int digit);
 void	 text_tick(const struct show_req *);
@@ -141,4 +113,4 @@ double	 now_monotonic(void);
 int	 run_daemon(void);
 int	 show_once(const struct show_req *);
 
-#endif /* !BOSD_H */
+#endif /* !BOSD_PRIV_H */

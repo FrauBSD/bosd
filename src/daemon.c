@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 volatile sig_atomic_t stop;
 int sock = -1;

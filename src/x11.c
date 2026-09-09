@@ -13,7 +13,7 @@
 #include <X11/extensions/Xrender.h>
 #include <X11/extensions/shape.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 Display	*dpy;
 Window	 win;

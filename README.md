@@ -19,8 +19,10 @@ Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
 ## Requirements
 
 - X11 (Xrandr, Xrender, Xext shape), Xft + fontconfig, libpng
+  (daemon / `bosd` binary only)
 - A compositor (e.g. picom) for translucency; opaque without one
 - Python 3 (stdlib only) to author glyphs with `tools/glyph.py`
+- C clients need only `libbosd` (no X11 link)
 
 ## Build / install
 
@@ -29,6 +31,27 @@ make
 make install    # PREFIX=/usr/local by default
 make clean
 ```
+
+Installs `bosd`, `libbosd.so.4`, `bosd.h`, `bosd.pc`, and the man
+pages. C clients:
+
+```sh
+cc $(pkg-config --cflags --libs bosd) -o hotkey hotkey.c
+```
+
+```c
+#include <bosd.h>
+
+struct bosd_req req;
+bosd_req_init(&req);
+strlcpy(req.spec, "airplane-on", sizeof(req.spec));
+req.hold = 1.5;
+if (bosd_alive("airplane"))
+	bosd_show("airplane", &req);
+```
+
+Warm the channel first (`bosd -n airplane -d &`); `bosd_show` does
+not paint locally when no daemon is running.
 
 ## Usage
 

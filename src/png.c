@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 #define CACHE_MAX 16
 

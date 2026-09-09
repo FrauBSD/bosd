@@ -16,7 +16,7 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/shape.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 #define STEXT_FONT "-misc-fixed-medium-r-normal--24-*-*-*-*-*-*"
 #define STEXT_TOP  205	/* text top, pixels up from the panel bottom */

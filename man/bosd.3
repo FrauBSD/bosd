@@ -1,0 +1,98 @@
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+.Dd September 9, 2026
+.Dt BOSD 3
+.Os
+.Sh NAME
+.Nm bosd_show ,
+.Nm bosd_clear ,
+.Nm bosd_alive ,
+.Nm bosd_req_init ,
+.Nm bosd_set_instance ,
+.Nm bosd_get_instance ,
+.Nm bosd_version
+.Nd client library for the bosd on-screen display engine
+.Sh LIBRARY
+.Lb libbosd
+.Sh SYNOPSIS
+.In bosd.h
+.Ft void
+.Fn bosd_req_init "struct bosd_req *req"
+.Ft int
+.Fn bosd_set_instance "const char *name"
+.Ft const char *
+.Fn bosd_get_instance "void"
+.Ft int
+.Fn bosd_alive "const char *channel"
+.Ft int
+.Fn bosd_show "const char *channel" "const struct bosd_req *req"
+.Ft int
+.Fn bosd_clear "const char *channel"
+.Ft const char *
+.Fn bosd_version "void"
+.Sh DESCRIPTION
+.Nm libbosd
+sends display requests to a warm
+.Xr bosd 1
+channel daemon over a Unix datagram socket.
+Callers link with
+.Fl lbosd
+.Pq or Cm pkg-config --libs bosd
+and never need to fork the
+.Nm bosd
+binary.
+The library does not open an X11 display; the daemon owns the overlay.
+.Pp
+.Fa channel
+selects the daemon instance
+.Pq the same name as
+.Nm bosd Fl n ;
+.Dv NULL
+or an empty string means
+.Dq default .
+.Pp
+.Fn bosd_req_init
+clears
+.Fa req
+and applies the same defaults as the CLI
+.Pq 2 s hold, scale 1, outline on, no bar, bar hold 3 s .
+Fill the fields that apply, then call
+.Fn bosd_show .
+String fields accept the same backslash escapes documented in
+.Xr bosd 1 .
+.Pp
+.Fn bosd_show
+returns 0 when the datagram is accepted, or \-1 on failure
+.Pq typically no warm daemon .
+It does not paint locally.
+.Fn bosd_clear
+hides the artwork and bar on the channel.
+.Fn bosd_alive
+returns 1 when a daemon owns the channel.
+.Pp
+.Fn bosd_set_instance
+and
+.Fn bosd_get_instance
+maintain the process-wide channel name used by the
+.Nm bosd
+CLI
+.Pq Fl n ;
+library callers normally pass
+.Fa channel
+explicitly instead.
+.Sh RETURN VALUES
+.Fn bosd_show ,
+.Fn bosd_clear ,
+and
+.Fn bosd_set_instance
+return 0 on success and \-1 on failure.
+.Fn bosd_alive
+returns 1 or 0.
+.Fn bosd_version
+returns a static string such as
+.Dq 4.0 .
+.Sh SEE ALSO
+.Xr bosd 1 ,
+.Xr pkg-config 1
+.Sh AUTHORS
+.An Devin Teske Aq Mt dteske@FreeBSD.org

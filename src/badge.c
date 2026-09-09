@@ -8,7 +8,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 static XftFont *badge_font, *cap_font;
 static int badge_font_px = -1, cap_font_px = -1;

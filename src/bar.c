@@ -20,7 +20,7 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/shape.h>
 
-#include "bosd.h"
+#include "priv.h"
 
 #define BAR_FONT   "-misc-fixed-medium-r-normal--52-*-*-*-*-*-*"
 #define BAR_TICKS  56	/* tick count across the bar */
