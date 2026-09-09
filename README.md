@@ -91,6 +91,13 @@ c.write("share/bosd/my-glyph.png")
 ```
 
 `python3 tools/glyph.py out.png` draws a primitive sampler.
+`examples/bsd.py` is a complete art script: the letters BSD in
+FreeBSD red (#cb1008) at 80% opacity on a transparent ground.
+
+```sh
+python3 examples/bsd.py bsd.png
+bosd bsd.png
+```
 
 ## Consumers
 

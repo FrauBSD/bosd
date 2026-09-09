@@ -1,3 +1,5 @@
-bosd
-*.o
 *.core
+*.o
+__pycache__/
+bosd
+examples/*.png

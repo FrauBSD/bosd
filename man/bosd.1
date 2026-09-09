@@ -342,6 +342,11 @@ request socket
 daemon pid
 .It Pa /usr/local/share/bosd
 default icon directory
+.It Pa /usr/local/share/examples/bosd
+glyph authoring example
+.Pq Pa bsd.py
+and the shared rasterizer
+.Pq Pa glyph.py
 .El
 .Sh EXAMPLES
 Warm the airplane-mode channel at session start:
@@ -387,6 +392,14 @@ bosd -n power -p 'Shutdown in' -b s -c 10
 Caption a glyph:
 .Bd -literal -offset indent
 bosd -n airplane -a 'airplane mode off' airplane-off
+.Ed
+.Pp
+Build the example glyph
+.Pq the letters BSD in FreeBSD red at 80% opacity on a transparent ground
+and flash it:
+.Bd -literal -offset indent
+python3 /usr/local/share/examples/bosd/bsd.py bsd.png
+bosd bsd.png
 .Ed
 .Sh SEE ALSO
 .Xr xrandr 1

@@ -5,6 +5,7 @@ BINDIR?=	${PREFIX}/bin
 SHAREDIR?=	${PREFIX}/share
 MANDIR?=	${SHAREDIR}/man/man1
 ICONDIR?=	${SHAREDIR}/bosd
+EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
 
 CC?=		cc
 CFLAGS?=	-O2 -Wall -Wextra
@@ -34,12 +35,19 @@ ${OBJS}: src/bosd.h
 
 install: all
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${MANDIR} \
-		${DESTDIR}${ICONDIR}
+		${DESTDIR}${ICONDIR} ${DESTDIR}${EXAMPLEDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
 	install -m 444 ${MAN} ${DESTDIR}${MANDIR}/bosd.1
+	install -m 444 examples/bsd.py tools/glyph.py \
+		${DESTDIR}${EXAMPLEDIR}/
+
+example: examples/bsd.png
+
+examples/bsd.png: examples/bsd.py tools/glyph.py
+	python3 examples/bsd.py examples/bsd.png
 
 clean:
-	rm -f ${PROG} ${OBJS}
-	rm -rf tools/__pycache__
+	rm -f ${PROG} ${OBJS} examples/bsd.png
+	rm -rf tools/__pycache__ examples/__pycache__
 
-.PHONY: all install clean
+.PHONY: all install clean example

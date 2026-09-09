@@ -3,8 +3,9 @@
 One canonical home for the drawing plumbing every `*-icons-build`
 script previously carried its own copy of: an RGBA canvas with
 optional supersampling, an antialiased disc brush and the strokes
-built from it, convex polygon fill, and the PNG encoder.  Art scripts
-import this module and keep only their geometry.
+built from it, convex polygon fill, a path fill (even-odd or nonzero)
+for outlines with counters, and the PNG encoder.  Art scripts import
+this module and keep only their geometry.
 
 Coordinates are logical canvas units regardless of supersampling.
 Stdlib only.
@@ -18,6 +19,66 @@ import zlib
 from pathlib import Path
 
 WHITE = (255, 255, 255, 255)
+
+
+# -- path geometry (feeds Canvas.fill_path) --------------------------------
+
+def arc_pts(cx, cy, r, a0, a1, steps=None):
+	"""Points along a circular arc from angle a0 to a1 (radians)."""
+	if steps is None:
+		steps = max(2, int(abs(a1 - a0) * max(r, 1.0) / 2.0))
+	return [(cx + r * math.cos(a0 + (a1 - a0) * i / steps),
+	    cy + r * math.sin(a0 + (a1 - a0) * i / steps))
+	    for i in range(steps + 1)]
+
+
+def round_rect_pts(x0, y0, x1, y1, radii):
+	"""Closed outline of a rectangle; radii = (tl, tr, br, bl)."""
+	tl, tr, br, bl = radii
+	pi = math.pi
+	pts = []
+	pts += arc_pts(x0 + tl, y0 + tl, tl, pi, 1.5 * pi) if tl > 0 \
+	    else [(x0, y0)]
+	pts += arc_pts(x1 - tr, y0 + tr, tr, 1.5 * pi, 2.0 * pi) if tr > 0 \
+	    else [(x1, y0)]
+	pts += arc_pts(x1 - br, y1 - br, br, 0.0, 0.5 * pi) if br > 0 \
+	    else [(x1, y1)]
+	pts += arc_pts(x0 + bl, y1 - bl, bl, 0.5 * pi, pi) if bl > 0 \
+	    else [(x0, y1)]
+	return pts
+
+
+def outline(path, width, caps="butt"):
+	"""Closed outline of an open centerline stroked `width` thick.
+
+	caps is "butt" (cut square across the path) or "round".  Corners
+	of the centerline must be gentle relative to width/2 or the
+	offsets fold over.
+	"""
+	half = width / 2.0
+	n = len(path)
+	left = []
+	right = []
+	for i in range(n):
+		ax, ay = path[max(0, i - 1)]
+		bx, by = path[min(n - 1, i + 1)]
+		dx, dy = bx - ax, by - ay
+		d = math.hypot(dx, dy) or 1.0
+		nx, ny = -dy / d * half, dx / d * half
+		px, py = path[i]
+		left.append((px + nx, py + ny))
+		right.append((px - nx, py - ny))
+	if caps != "round":
+		return left + right[::-1]
+
+	def cap(tip, back):
+		# Semicircle around tip, bulging away from back.
+		a = math.atan2(tip[1] - back[1], tip[0] - back[0])
+		return arc_pts(tip[0], tip[1], half, a + math.pi / 2,
+		    a - math.pi / 2)
+
+	return (left + cap(path[-1], path[-2]) + right[::-1] +
+	    cap(path[0], path[1]))
 
 
 class Canvas:
@@ -182,6 +243,87 @@ class Canvas:
 		for cx, cy in ((x0 + rad, y0 + rad), (x1 - rad, y0 + rad),
 		    (x1 - rad, y1 - rad), (x0 + rad, y1 - rad)):
 			self.stamp(cx, cy, rad, color)
+
+	def fill_path(self, rings, color=WHITE, sub=4, rule="evenodd"):
+		"""Fill closed polylines as one shape; holes are more rings.
+
+		rule "evenodd" cuts a hole wherever rings overlap; "nonzero"
+		unions rings of one orientation and cuts holes with rings
+		of the opposite orientation.  Coverage is `sub` sub-scanlines
+		per pixel row with exact horizontal span coverage, so edges
+		antialias and a translucent color is laid down exactly once.
+		"""
+		ss = self.ss
+		cr, cg, cb, ca = color
+		nonzero = rule == "nonzero"
+		edges = []
+		for ring in rings:
+			pts = [(px * ss, py * ss) for px, py in ring]
+			n = len(pts)
+			for i in range(n):
+				x0, y0 = pts[i]
+				x1, y1 = pts[(i + 1) % n]
+				if y0 == y1:
+					continue
+				wind = 1
+				if y0 > y1:
+					x0, y0, x1, y1 = x1, y1, x0, y0
+					wind = -1
+				edges.append((y0, y1, x0, (x1 - x0) / (y1 - y0),
+				    wind))
+		if not edges:
+			return
+		edges.sort()
+		miny = max(0, int(math.floor(edges[0][0])))
+		maxy = min(self.h - 1,
+		    int(math.ceil(max(e[1] for e in edges))))
+		wgt = 1.0 / sub
+		w = self.w
+		for py in range(miny, maxy + 1):
+			cov = [0.0] * (w + 1)
+			touched = False
+			for k in range(sub):
+				yy = py + (k + 0.5) / sub
+				xs = [(x0 + (yy - y0) * m, wd)
+				    for y0, y1, x0, m, wd in edges if y0 <= yy < y1]
+				if len(xs) < 2:
+					continue
+				xs.sort()
+				spans = []
+				depth = 0
+				for i in range(len(xs) - 1):
+					if nonzero:
+						depth += xs[i][1]
+						inside = depth != 0
+					else:
+						depth += 1
+						inside = depth % 2 == 1
+					if inside:
+						spans.append((xs[i][0], xs[i + 1][0]))
+				for xa, xb in spans:
+					xa = max(0.0, xa)
+					xb = min(float(w), xb)
+					if xb <= xa:
+						continue
+					touched = True
+					ia = int(xa)
+					ib = int(xb)
+					if ia == ib:
+						cov[ia] += (xb - xa) * wgt
+						continue
+					cov[ia] += (ia + 1 - xa) * wgt
+					for j in range(ia + 1, ib):
+						cov[j] += wgt
+					if ib < w:
+						cov[ib] += (xb - ib) * wgt
+			if not touched:
+				continue
+			row = py * w
+			for px in range(w):
+				c = cov[px]
+				if c > 0.0:
+					self._blend((row + px) * 4, cr, cg, cb,
+					    int(ca * min(1.0, c) + 0.5))
 
 	# -- output --------------------------------------------------------
 
