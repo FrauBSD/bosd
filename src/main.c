@@ -19,7 +19,7 @@ usage(void)
 	    "Usage: bosd [-h] [-n instance] { -d | -C }\n"
 	    "       bosd [-ho] [-n instance] [-b badge] [-s scale] "
 	    "[-x offset] \\\n"
-	    "            [-y offset] { icon | -c countdown } "
+	    "            [-y offset] { icon | -c countdown | -t text } "
 	    "[hold_seconds]\n");
 	exit(1);
 }
@@ -28,14 +28,15 @@ int
 main(int argc, char **argv)
 {
 	struct show_req req;
-	int ch, count = 0, Cflag = 0, dflag = 0;
+	char badge_dec[BOSD_BADGE_MAX];
+	int ch, count = 0, Cflag = 0, dflag = 0, tflag = 0;
 
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.outline = 1;
 
-	while ((ch = getopt(argc, argv, "Cb:c:dhn:os:x:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "Cb:c:dhn:os:t:x:y:")) != -1) {
 		switch (ch) {
 		case 'C':
 			Cflag = 1;
@@ -87,6 +88,19 @@ main(int argc, char **argv)
 				usage();
 			}
 			break;
+		case 't':
+			if (optarg[0] == '\0' ||
+			    strlen(optarg) >= sizeof(req.spec) ||
+			    optarg[strcspn(optarg, " \t\n")] != '\0') {
+				fprintf(stderr, "bosd: -t text must be "
+				    "1 to %zu characters, no whitespace "
+				    "(escape it: \\x20)\n",
+				    sizeof(req.spec) - 1);
+				usage();
+			}
+			tflag = 1;
+			strlcpy(req.spec, optarg, sizeof(req.spec));
+			break;
 		case 'x':
 			req.x_off = atoi(optarg);
 			break;
@@ -105,9 +119,9 @@ main(int argc, char **argv)
 	if (dflag || Cflag) {
 		if (dflag && Cflag)
 			usage();
-		if (argc != 0 || count != 0 || req.badge[0] != '\0' ||
-		    req.scale != 1.0 || !req.outline || req.x_off != 0 ||
-		    req.y_off != 0)
+		if (argc != 0 || count != 0 || tflag ||
+		    req.badge[0] != '\0' || req.scale != 1.0 ||
+		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
 		if (dflag)
 			return (run_daemon());
@@ -117,11 +131,13 @@ main(int argc, char **argv)
 		return (0);
 	}
 
-	if (count > 0) {
-		if (argc > 1)
+	if (count > 0 || tflag) {
+		if (argc > 1 || (count > 0 && tflag))
 			usage();
 		req.count = count;
-		req.hold = 1.0;	/* one second per digit */
+		req.text = tflag;
+		if (count > 0)
+			req.hold = 1.0;	/* one second per digit */
 		if (argc == 1) {
 			char *ep;
 
@@ -135,7 +151,9 @@ main(int argc, char **argv)
 		}
 		if (daemon_alive() && send_show(&req) == 0)
 			return (0);
-		return (run_countdown(&req));
+		decode_escapes(req.badge, badge_dec, sizeof(badge_dec));
+		strlcpy(req.badge, badge_dec, sizeof(req.badge));
+		return (tflag ? run_text(&req) : run_countdown(&req));
 	}
 
 	if (argc < 1 || argc > 2)
@@ -151,5 +169,7 @@ main(int argc, char **argv)
 	if (daemon_alive() && send_show(&req) == 0)
 		return (0);
 
+	decode_escapes(req.badge, badge_dec, sizeof(badge_dec));
+	strlcpy(req.badge, badge_dec, sizeof(req.badge));
 	return (show_once(&req));
 }

@@ -5,9 +5,11 @@
  * SPEC [BADGE]" — HOLD in seconds, XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
- * show (SPEC then a placeholder), SPEC an absolute path or a bare
- * name resolved against BOSD_PATH / the compiled share directory
- * (".png" appended when missing).
+ * show (SPEC then a placeholder) and -1 a text show (SPEC then the
+ * text, escapes still encoded), SPEC otherwise an absolute path or
+ * a bare name resolved against BOSD_PATH / the compiled share
+ * directory (".png" appended when missing).  A bare "CLEAR" hides
+ * the active render.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +94,8 @@ send_show(const struct show_req *req)
 
 	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s%s%s",
 	    req->hold, req->x_off, req->y_off, req->scale, req->outline,
-	    req->count, req->spec[0] != '\0' ? req->spec : "-",
+	    req->text ? -1 : req->count,
+	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
 	return (send_dgram(msg));
 }
@@ -131,11 +134,13 @@ parse_show(const char *buf, struct show_req *req)
 	req->scale = scale;
 	req->outline = outline != 0;
 	req->count = count > 0 ? count : 0;
+	req->text = count < 0;
 	req->clear = 0;
 	req->x_off = x_off;
 	req->y_off = y_off;
 	strlcpy(req->spec, name, sizeof(req->spec));
-	strlcpy(req->badge, badge, sizeof(req->badge));
+	/* Badge is always display text: decode escapes on arrival. */
+	decode_escapes(badge, req->badge, sizeof(req->badge));
 	return (0);
 }
 

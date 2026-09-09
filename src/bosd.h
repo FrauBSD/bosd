@@ -42,6 +42,7 @@ struct show_req {
 	double	 scale;		/* multiplies the panel-derived size */
 	int	 outline;	/* black halo behind the glyph */
 	int	 count;		/* > 0: countdown show, not an icon */
+	int	 text;		/* spec is text to render, not an icon */
 	int	 clear;		/* hide the active render, show nothing */
 	int	 x_off;		/* horizontal shift: positive right */
 	int	 y_off;		/* vertical shift: positive down */
@@ -92,10 +93,13 @@ int	 parse_show(const char *buf, struct show_req *);
 int	 icon_resolve(const char *spec, char *path, size_t pathlen);
 
 /* countdown.c */
+void	 decode_escapes(const char *in, char *out, size_t outlen);
 int	 countdown_begin(const struct show_req *);
 void	 countdown_tick(const struct show_req *, int digit);
+void	 text_tick(const struct show_req *);
 void	 countdown_end(void);
 int	 run_countdown(const struct show_req *);
+int	 run_text(const struct show_req *);
 
 /* daemon.c */
 extern volatile sig_atomic_t stop;

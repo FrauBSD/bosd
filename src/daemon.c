@@ -129,6 +129,22 @@ countdown_cycle(struct show_req *req, int sockfd)
 	return (0);
 }
 
+/* Hold a text show; returns 1 when a new show preempted us. */
+static int
+text_cycle(struct show_req *req, int sockfd)
+{
+	struct show_req cur = *req;
+	int replaced;
+
+	if (countdown_begin(&cur) != 0)
+		return (0);
+	text_tick(&cur);
+	replaced = wait_or_replace(sockfd, now_monotonic() + cur.hold,
+	    req, NULL, NULL);
+	countdown_end();
+	return (replaced);
+}
+
 static void
 show_cycle(struct show_req *req, int sockfd)
 {
@@ -143,6 +159,12 @@ restart:
 	}
 	if (req->count > 0) {
 		if (countdown_cycle(req, sockfd))
+			goto restart;
+		hide_overlay();
+		return;
+	}
+	if (req->text) {
+		if (text_cycle(req, sockfd))
 			goto restart;
 		hide_overlay();
 		return;
@@ -163,7 +185,7 @@ restart:
 		    now_monotonic() + req->hold, req, ic, &shown);
 		if (!replaced)
 			break;
-		if (req->count > 0 || req->clear)
+		if (req->count > 0 || req->text || req->clear)
 			goto restart;
 		/* Unresolvable replacement: keep the current show up. */
 		next = icon_lookup(req->spec, req->scale, req->outline);

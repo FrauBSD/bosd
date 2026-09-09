@@ -21,7 +21,7 @@
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
-.Bro Ar icon | Fl c Ar countdown Brc
+.Bro Ar icon | Fl c Ar countdown | Fl t Ar text Brc
 .Op Ar hold_seconds
 .Sh DESCRIPTION
 .Nm
@@ -40,7 +40,14 @@ as a superscript at the glyph's upper right \(em white with a black
 outline, about a quarter of the glyph height.
 Used for index digits and short labels
 .Pq e.g. a headphone number, Dq All .
-At most 31 characters; whitespace is not permitted.
+At most 31 characters before decoding; literal whitespace is not
+permitted.
+Escapes decode as with
+.Fl t ,
+so
+.Ql a\ex20b
+badges as
+.Dq a b .
 .It Fl C
 Clear the channel's active render \(em hide an in-progress show,
 such as a long countdown \(em and return immediately.
@@ -86,6 +93,32 @@ The glyph is normally sized from the panel height, independent of
 the PNG's native resolution;
 .Fl s Li 2.0
 renders it twice that size.
+.It Fl t Ar text
+Draw
+.Ar text
+in the countdown's giant outlined style, centered on the panel and
+held like an icon show \(em e.g. the checkmark confirming a
+screenshot.
+Replaces
+.Ar icon
+and is dispatched like any show.
+Escapes decode before rendering:
+.Ql \ex Ns Ar NN
+a raw byte,
+.Ql \eu Ns Ar NNNN
+and
+.Ql \eU Ns Ar NNNNNNNN
+a Unicode codepoint (UTF-8 encoded), and
+.Ql \e\e
+a backslash \(em so
+.Fl t Ql \eu2713
+draws the checkmark.
+Literal whitespace is not permitted; embed it as
+.Ql \ex20 .
+Honors
+.Fl b , o , s , x ,
+and
+.Fl y .
 .It Fl x Ar offset
 Shift the artwork horizontally by
 .Ar offset

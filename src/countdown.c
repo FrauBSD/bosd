@@ -21,6 +21,7 @@ static XftDraw	*draw;
 static XftColor	 fg, bg;
 static int	 stroke;
 static int	 lock_len, lock_x, lock_bx;
+static char	 text_buf[BOSD_SPEC_MAX];
 
 static void
 on_signal(int sig __unused)
@@ -51,6 +52,100 @@ stroke_for(int pointsize)
 	return (s < 3 ? 3 : s);
 }
 
+static int
+xdigit(int c)
+{
+	if (c >= '0' && c <= '9')
+		return (c - '0');
+	if (c >= 'a' && c <= 'f')
+		return (c - 'a' + 10);
+	if (c >= 'A' && c <= 'F')
+		return (c - 'A' + 10);
+	return (-1);
+}
+
+static size_t
+utf8_put(char *out, unsigned long cp)
+{
+	if (cp < 0x80) {
+		out[0] = (char)cp;
+		return (1);
+	}
+	if (cp < 0x800) {
+		out[0] = (char)(0xc0 | (cp >> 6));
+		out[1] = (char)(0x80 | (cp & 0x3f));
+		return (2);
+	}
+	if (cp < 0x10000) {
+		out[0] = (char)(0xe0 | (cp >> 12));
+		out[1] = (char)(0x80 | ((cp >> 6) & 0x3f));
+		out[2] = (char)(0x80 | (cp & 0x3f));
+		return (3);
+	}
+	if (cp < 0x110000) {
+		out[0] = (char)(0xf0 | (cp >> 18));
+		out[1] = (char)(0x80 | ((cp >> 12) & 0x3f));
+		out[2] = (char)(0x80 | ((cp >> 6) & 0x3f));
+		out[3] = (char)(0x80 | (cp & 0x3f));
+		return (4);
+	}
+	return (0);
+}
+
+/*
+ * Decode \xNN (raw byte), \uNNNN and \UNNNNNNNN (codepoint, UTF-8
+ * encoded), and \\.  Malformed escapes pass through literally.
+ */
+void
+decode_escapes(const char *in, char *out, size_t outlen)
+{
+	size_t o = 0;
+
+	while (*in != '\0' && o + 5 < outlen) {
+		unsigned long cp = 0;
+		int i, n, v;
+
+		if (in[0] != '\\') {
+			out[o++] = *in++;
+			continue;
+		}
+		switch (in[1]) {
+		case '\\':
+			out[o++] = '\\';
+			in += 2;
+			continue;
+		case 'x':
+			n = 2;
+			break;
+		case 'u':
+			n = 4;
+			break;
+		case 'U':
+			n = 8;
+			break;
+		default:
+			out[o++] = *in++;
+			continue;
+		}
+		for (i = 0; i < n; i++) {
+			v = xdigit((unsigned char)in[2 + i]);
+			if (v < 0)
+				break;
+			cp = cp * 16 + (unsigned long)v;
+		}
+		if (i < n) {
+			out[o++] = *in++;
+			continue;
+		}
+		if (in[1] == 'x')
+			out[o++] = (char)cp;
+		else
+			o += utf8_put(out + o, cp);
+		in += 2 + n;
+	}
+	out[o] = '\0';
+}
+
 /* Widest digit's extents: the fixed slot every glyph centers in. */
 static void
 ref_digit_extents(XGlyphInfo *ref)
@@ -69,13 +164,19 @@ ref_digit_extents(XGlyphInfo *ref)
 	}
 }
 
-/* Largest tabular bold face that fits the panel with outline air. */
+/*
+ * Largest tabular bold face that fits the panel with outline air —
+ * width-checked against fit_text when given, the widest glyph slot
+ * otherwise.
+ */
 static XftFont *
-open_fit_font(int screen, int w, int h, int *pointsize)
+open_fit_font(int screen, int w, int h, int *pointsize,
+    const char *fit_text)
 {
 	char pattern[128];
 	XftFont *f;
-	int ps = *pointsize, s;
+	XGlyphInfo e;
+	int ps = *pointsize, s, tw;
 
 	while (ps >= 16) {
 		s = stroke_for(ps);
@@ -84,8 +185,15 @@ open_fit_font(int screen, int w, int h, int *pointsize)
 		f = XftFontOpenName(dpy, screen, pattern);
 		if (f == NULL)
 			break;
+		if (fit_text != NULL) {
+			XftTextExtentsUtf8(dpy, f,
+			    (const FcChar8 *)fit_text,
+			    (int)strlen(fit_text), &e);
+			tw = (int)e.width;
+		} else
+			tw = (int)f->max_advance_width;
 		if (f->ascent + f->descent + s * 2 + 32 <= h &&
-		    (int)f->max_advance_width + s * 2 + 32 <= w) {
+		    tw + s * 2 + 32 <= w) {
 			*pointsize = ps;
 			return (f);
 		}
@@ -124,6 +232,8 @@ countdown_begin(const struct show_req *req)
 
 	FcInit();
 	lock_len = 0;
+	if (req->text)
+		decode_escapes(req->spec, text_buf, sizeof(text_buf));
 	if (layout_fullscreen() != 0)
 		return (-1);
 
@@ -132,7 +242,8 @@ countdown_begin(const struct show_req *req)
 		pointsize = 16;
 	if (req->scale <= 1.0 && pointsize > 612)
 		pointsize = 612;
-	font = open_fit_font(screen, scr_w, scr_h, &pointsize);
+	font = open_fit_font(screen, scr_w, scr_h, &pointsize,
+	    req->text ? text_buf : NULL);
 	if (font == NULL)
 		return (-1);
 	stroke = req->outline ? stroke_for(pointsize) : 0;
@@ -209,6 +320,36 @@ countdown_tick(const struct show_req *req, int digit)
 	XFlush(dpy);
 }
 
+/* One centered render of the decoded text (e.g. the checkmark). */
+void
+text_tick(const struct show_req *req)
+{
+	XGlyphInfo extents;
+	XftColor clear;
+	int x, y, bx, by, bstroke;
+
+	raise_overlay();
+	memset(&clear, 0, sizeof(clear));
+	XftDrawRect(draw, &clear, 0, 0, (unsigned)win_w, (unsigned)win_h);
+
+	XftTextExtentsUtf8(dpy, font, (const FcChar8 *)text_buf,
+	    (int)strlen(text_buf), &extents);
+	/* Outline adds visual weight; nudge left by half stroke. */
+	x = win_w / 2 - stroke / 2 - (int)extents.width / 2 +
+	    (int)extents.x + req->x_off;
+	y = (win_h + font->ascent - font->descent) / 2 + req->y_off;
+	draw_outlined(font, x, y, text_buf, stroke);
+
+	if (bfont != NULL) {
+		bx = x - (int)extents.x + (int)extents.width + stroke + 8;
+		by = y - font->ascent + bfont->ascent;
+		bstroke = stroke > 0 ?
+		    (stroke / 3 < 3 ? 3 : stroke / 3) : 0;
+		draw_outlined(bfont, bx, by, req->badge, bstroke);
+	}
+	XFlush(dpy);
+}
+
 void
 countdown_end(void)
 {
@@ -245,6 +386,25 @@ run_countdown(const struct show_req *req)
 		countdown_tick(req, i);
 		hold_exact(req->hold);
 	}
+	countdown_end();
+	hide_overlay();
+	x11_cleanup();
+	return (0);
+}
+
+/* One-shot fallback for a text show. */
+int
+run_text(const struct show_req *req)
+{
+	if (init_display() != 0)
+		return (1);
+	signal(SIGTERM, on_signal);
+	signal(SIGINT, on_signal);
+
+	if (countdown_begin(req) != 0)
+		return (1);
+	text_tick(req);
+	hold_exact(req->hold);
 	countdown_end();
 	hide_overlay();
 	x11_cleanup();
