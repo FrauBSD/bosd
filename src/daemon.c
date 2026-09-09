@@ -24,7 +24,7 @@ volatile sig_atomic_t stop;
 int sock = -1;
 
 /* Main-show slot. */
-enum { M_NONE, M_ICON, M_COUNT, M_TEXT };
+enum { M_NONE, M_ICON, M_COUNT, M_TEXT, M_STEXT };
 static int m_kind;
 static struct show_req m_req;
 static double m_deadline;	/* next tick or expiry; < 0 never */
@@ -69,7 +69,9 @@ main_stop(void)
 {
 	if (m_kind == M_COUNT || m_kind == M_TEXT)
 		countdown_end();
-	if (m_kind != M_NONE)
+	if (m_kind == M_STEXT)
+		stext_hide();
+	else if (m_kind != M_NONE)
 		hide_overlay();
 	m_kind = M_NONE;
 	m_icon = NULL;
@@ -80,7 +82,22 @@ main_start(const struct show_req *req)
 {
 	if (m_kind == M_COUNT || m_kind == M_TEXT)
 		countdown_end();
+	/* Renderer swap: the outgoing artwork's window must go. */
+	if (m_kind == M_STEXT && !req->small)
+		stext_hide();
+	else if (m_kind != M_NONE && m_kind != M_STEXT && req->small)
+		hide_overlay();
 
+	if (req->small) {
+		m_req = *req;
+		if (stext_show(&m_req) != 0) {
+			main_stop();
+			return;
+		}
+		m_kind = M_STEXT;
+		m_deadline = expiry(m_req.hold);
+		return;
+	}
 	if (req->count > 0) {
 		m_req = *req;
 		if (countdown_begin(&m_req) != 0) {

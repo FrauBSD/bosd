@@ -26,7 +26,18 @@
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
-.Bro Ar icon | Fl c Ar countdown | Fl t Ar text Brc
+.Bro Ar icon | Fl c Ar countdown | Fl T Ar text Brc
+.Op Ar hold_seconds
+.Nm
+.Op Fl Dhv
+.Op Fl n Ar instance
+.Op Fl B Ar seconds
+.Op Fl F Ar color
+.Op Fl G Ar color
+.Op Fl g Ar percent
+.Op Fl x Ar offset
+.Op Fl y Ar offset
+.Fl t Ar text
 .Op Ar hold_seconds
 .Nm
 .Op Fl Dhv
@@ -41,19 +52,23 @@
 is an on-screen display engine: it flashes transient,
 click-through feedback over the desktop, the kind a desktop
 environment shows for media keys and hotkeys.
-Feedback takes four forms: a PNG glyph scaled to the panel and
+Feedback takes five forms: a PNG glyph scaled to the panel and
 outlined for legibility, giant countdown digits
 .Pq Fl c ,
-short outlined text
+large outlined text
+.Pq Fl T ,
+small caption text
 .Pq Fl t ,
 and a gauge bar
 .Pq Fl g .
-Glyph, digits, and text composite directly over the desktop,
+Glyph, digits, and large text composite directly over the desktop,
 centered on the monitor marked primary
 .Pq see Xr xrandr 1 ;
 when no primary is set, on the laptop's built-in panel
 .Pq eDP/LVDS/DSI ;
 and failing both, on the X screen as a whole.
+Small text centers near the bottom of the same panel, its top
+fixed 205 pixels up.
 The gauge bar runs on an independent timer, so a gauge and a
 glyph can be up at once: a new gauge replaces the gauge, new
 artwork replaces the artwork, and neither clears the other.
@@ -68,7 +83,7 @@ glyph, digits, or text, e.g.
 .Dq airplane mode off
 under the airplane glyph.
 Escapes decode as with
-.Fl t ;
+.Fl T ;
 literal whitespace is permitted.
 At most 63 characters before decoding.
 .It Fl B Ar seconds
@@ -89,7 +104,7 @@ Used for index digits and short labels
 At most 31 characters before decoding; literal whitespace is not
 permitted.
 Escapes decode as with
-.Fl t ,
+.Fl T ,
 so
 .Ql a\ex20b
 badges as
@@ -130,6 +145,15 @@ displays.
 Run as the display daemon for
 .Ar instance ,
 listening on a per-user datagram socket.
+.It Fl F Ar color
+Fill the small text
+.Pq Fl t
+with
+.Ar color ,
+a name or #rrggbb
+.Pq default green .
+Requires
+.Fl t .
 .It Fl G Ar color
 Fill the gauge bar's ticks with
 .Ar color ,
@@ -153,6 +177,7 @@ past the bar's right edge in the same color.
 Alone it shows only the bar; alongside an
 .Ar icon ,
 .Fl c ,
+.Fl T ,
 or
 .Fl t
 the two go up together, each expiring on its own hold:
@@ -193,7 +218,7 @@ The glyph is normally sized from the panel height, independent of
 the PNG's native resolution;
 .Fl s Li 2.0
 renders it twice that size.
-.It Fl t Ar text
+.It Fl T Ar text
 Draw
 .Ar text
 in the countdown's giant outlined style, centered on the panel and
@@ -215,13 +240,37 @@ and
 a backslash
 .Po
 so
-.Fl t Ql \eu2713
+.Fl T Ql \eu2713
 draws the checkmark
 .Pc .
 Literal whitespace is not permitted; embed it as
 .Ql \ex20 .
 Honors
 .Fl b , o , s , x ,
+and
+.Fl y .
+.It Fl t Ar text
+Draw
+.Ar text
+as small caption lines: 24-pixel fixed type, black-outlined,
+centered near the panel bottom with the first line's top fixed
+205 pixels up, filled with the
+.Fl F
+color
+.Pq default green ;
+the look and place of a screenshot's filename caption.
+Lines split on newline
+.Pq escape Ql \ex0a ,
+center individually, and grow downward.
+Replaces
+.Ar icon
+and is dispatched like one; the gauge bar is independent.
+Escapes decode as with
+.Fl T ;
+literal whitespace is not permitted
+.Pq embed it as Ql \ex20 .
+Honors
+.Fl x
 and
 .Fl y .
 .It Fl v
@@ -310,12 +359,18 @@ Show the second headphone output:
 bosd -n audio -b 2 audio-headphones 1.5
 .Ed
 .Pp
-Screenshot flow: count down from 3, capture, confirm with a
-checkmark:
+Screenshot flow
+.Pq count down from 3, capture, confirm with a checkmark :
 .Bd -literal -offset indent
 bosd -n shot -c 3
 scrot screenshot.png
-bosd -n shot -t '\eu2713' 1
+bosd -n shot -T '\eu2713' 1
+.Ed
+.Pp
+Announce the saved file
+.Pq two green caption lines at the panel bottom :
+.Bd -literal -offset indent
+bosd -n shot -t 'Screenshot\ex0ascreenshot-2026.09.08.png' 2
 .Ed
 .Pp
 Clear whatever the channel is showing:

@@ -2,17 +2,18 @@
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
  * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE OUTL CNT
- * PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until replaced
- * or cleared), XOFF/YOFF signed shifts in pixels
+ * TCOLOR PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until
+ * replaced or cleared), XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
- * show (SPEC then a placeholder) and -1 a text show (SPEC then the
- * text, escapes still encoded), PFX/APX captions above/below ("-"
- * when absent, whitespace escaped in flight), SPEC otherwise an
- * absolute path or a bare name resolved against BOSD_PATH / the
+ * (SPEC then a placeholder), -1 large text and -2 small text (SPEC
+ * then the text, escapes still encoded), TCOLOR the small-text
+ * color ("-" for the default green), PFX/APX captions above/below
+ * ("-" when absent, whitespace escaped in flight), SPEC otherwise
+ * an absolute path or a bare name resolved against BOSD_PATH / the
  * compiled share directory (".png" appended when missing).  A bare
- * "CLEAR" hides the active render(s).  A gauge travels separately as
- * "BAR HOLD XOFF YOFF PCT COLOR" and coexists with the main show.
+ * "CLEAR" hides the active render(s).  A gauge travels separately
+ * as "BAR HOLD XOFF YOFF PCT COLOR" and coexists with the artwork.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -123,14 +124,16 @@ send_show(const struct show_req *req)
 		if (send_dgram(msg) != 0)
 			return (-1);
 		/* Gauge alone, or artwork too? */
-		if (req->spec[0] == '\0' && req->count <= 0 && !req->text)
+		if (req->spec[0] == '\0' && req->count <= 0 &&
+		    !req->text && !req->small)
 			return (0);
 	}
 	encode_ws(req->prefix, pfx, sizeof(pfx));
 	encode_ws(req->append, apx, sizeof(apx));
-	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s %s %s%s%s",
+	snprintf(msg, sizeof(msg), "%.2f %d %d %.3f %d %d %s %s %s %s%s%s",
 	    req->hold, req->x_off, req->y_off, req->scale, req->outline,
-	    req->text ? -1 : req->count, pfx, apx,
+	    req->text ? -1 : req->small ? -2 : req->count,
+	    req->tcolor[0] != '\0' ? req->tcolor : "-", pfx, apx,
 	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
 	return (send_dgram(msg));
@@ -148,6 +151,7 @@ parse_show(const char *buf, struct show_req *req)
 	double hold, scale;
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
+	char tcolor[BOSD_COLOR_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 	int n, x_off, y_off, outline, count;
 
@@ -173,11 +177,11 @@ parse_show(const char *buf, struct show_req *req)
 	}
 
 	badge[0] = '\0';
-	/* Field widths track BOSD_SPEC/BADGE/CAPTION_MAX (escaped x4). */
-	n = sscanf(buf, "%lf %d %d %lf %d %d %255s %255s %1023s %31s",
-	    &hold, &x_off, &y_off, &scale, &outline, &count, pfx, apx,
-	    name, badge);
-	if (n < 9)
+	/* Field widths track BOSD_SPEC/BADGE/COLOR/CAPTION_MAX (x4). */
+	n = sscanf(buf, "%lf %d %d %lf %d %d %31s %255s %255s %1023s %31s",
+	    &hold, &x_off, &y_off, &scale, &outline, &count, tcolor,
+	    pfx, apx, name, badge);
+	if (n < 10)
 		return (-1);
 	if (hold != -1.0 && hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
@@ -189,11 +193,16 @@ parse_show(const char *buf, struct show_req *req)
 	req->scale = scale;
 	req->outline = outline != 0;
 	req->count = count > 0 ? count : 0;
-	req->text = count < 0;
+	req->text = count == -1;
+	req->small = count == -2;
 	req->clear = 0;
 	req->gauge = -1;
 	req->x_off = x_off;
 	req->y_off = y_off;
+	if (strcmp(tcolor, "-") == 0)
+		req->tcolor[0] = '\0';
+	else
+		strlcpy(req->tcolor, tcolor, sizeof(req->tcolor));
 	strlcpy(req->spec, name, sizeof(req->spec));
 	/* Display text: decode escapes on arrival; "-" means absent. */
 	decode_escapes(badge, req->badge, sizeof(req->badge));

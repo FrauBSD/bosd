@@ -60,32 +60,32 @@ bar_metrics(void)
 	return (0);
 }
 
-static int
-bar_window(int x, int y, int w, int h)
+/* Borderless click-through window whose shape the caller sets. */
+Window
+shaped_window(int x, int y, int w, int h)
 {
 	XSetWindowAttributes wa;
 	Atom net_wm_state, states[3];
+	Window swin;
 	int screen = DefaultScreen(dpy);
 
-	if (bwin != 0)
-		return (0);
 	wa.override_redirect = True;
 	wa.background_pixel = BlackPixel(dpy, screen);
-	bwin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
+	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
 	    (unsigned)w, (unsigned)h, 0, CopyFromParent, InputOutput,
 	    CopyFromParent, CWOverrideRedirect | CWBackPixel, &wa);
-	if (bwin == 0)
-		return (-1);
+	if (swin == 0)
+		return (0);
 	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
 	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
 	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
 	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	XChangeProperty(dpy, bwin, net_wm_state, XA_ATOM, 32,
+	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
 	    PropModeReplace, (unsigned char *)states, 3);
 	/* Click-through. */
-	XShapeCombineRectangles(dpy, bwin, ShapeInput, 0, 0, NULL, 0,
+	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
 	    ShapeSet, Unsorted);
-	return (0);
+	return (swin);
 }
 
 /* One tick pass: rectangles into the pixmap and the shape mask. */
@@ -153,7 +153,7 @@ bar_show(const struct show_req *req)
 	w = scr_w;
 	x = scr_x + req->x_off;
 	y = scr_y + scr_h - lineh - BAR_VOFF + req->y_off;
-	if (bar_window(x, y, w, lineh) != 0)
+	if (bwin == 0 && (bwin = shaped_window(x, y, w, lineh)) == 0)
 		return (-1);
 	XMoveResizeWindow(dpy, bwin, x, y, (unsigned)w, (unsigned)lineh);
 

@@ -444,6 +444,7 @@ x11_cleanup(void)
 {
 	badge_cleanup();
 	bar_cleanup();
+	stext_cleanup();
 	if (dpy != NULL && gc != None) {
 		XFreeGC(dpy, gc);
 		gc = None;

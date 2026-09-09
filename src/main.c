@@ -21,7 +21,11 @@ usage(void)
 	    "[-b badge] \\\n"
 	    "            [-G color] [-g percent] [-p text] [-s scale] "
 	    "[-x offset] \\\n"
-	    "            [-y offset] { icon | -c countdown | -t text } "
+	    "            [-y offset] { icon | -c countdown | -T text } "
+	    "[hold_seconds]\n"
+	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
+	    "[-G color] \\\n"
+	    "            [-g percent] [-x offset] [-y offset] -t text "
 	    "[hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
 	    "[-x offset] \\\n"
@@ -62,7 +66,7 @@ int
 main(int argc, char **argv)
 {
 	struct show_req req;
-	int ch, count = 0, Bflag = 0, Cflag = 0, Dflag = 0;
+	int ch, count = 0, Bflag = 0, Cflag = 0, Dflag = 0, Tflag = 0;
 	int dflag = 0, tflag = 0;
 
 	memset(&req, 0, sizeof(req));
@@ -73,7 +77,7 @@ main(int argc, char **argv)
 	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
 	while ((ch = getopt(argc, argv,
-	    "B:CDG:a:b:c:dg:hn:op:s:tvx:y:")) != -1) {
+	    "B:CDF:G:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'B':
 			Bflag = 1;
@@ -93,6 +97,15 @@ main(int argc, char **argv)
 			break;
 		case 'D':
 			Dflag = 1;	/* render directly, skip daemon */
+			break;
+		case 'F':
+			if (strlen(optarg) >= sizeof(req.tcolor)) {
+				fprintf(stderr, "bosd: -F color must be "
+				    "at most %zu characters\n",
+				    sizeof(req.tcolor) - 1);
+				usage();
+			}
+			strlcpy(req.tcolor, optarg, sizeof(req.tcolor));
 			break;
 		case 'G':
 			if (strlen(optarg) >= sizeof(req.color)) {
@@ -174,13 +187,16 @@ main(int argc, char **argv)
 				usage();
 			}
 			break;
-		case 't':
+		case 'T':
 			/*
 			 * Flag, not an argument: the text is the first
 			 * operand, so getopt stops there and a negative
 			 * hold_seconds after it needs no "--".
 			 */
-			tflag = 1;
+			Tflag = 1;	/* large outlined text */
+			break;
+		case 't':
+			tflag = 1;	/* small caption text */
 			break;
 		case 'v':
 			printf("%s\n", BOSD_VERSION);
@@ -208,11 +224,11 @@ main(int argc, char **argv)
 			    "cannot clear a daemon's display (-C)\n");
 			usage();
 		}
-		if (Dflag || argc != 0 || count != 0 || tflag ||
+		if (Dflag || argc != 0 || count != 0 || tflag || Tflag ||
 		    req.gauge >= 0 || req.badge[0] != '\0' ||
-		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
-		    req.scale != 1.0 || !req.outline ||
-		    req.x_off != 0 || req.y_off != 0)
+		    req.tcolor[0] != '\0' || req.prefix[0] != '\0' ||
+		    req.append[0] != '\0' || req.scale != 1.0 ||
+		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
 		if (dflag)
 			return (run_daemon());
@@ -227,9 +243,15 @@ main(int argc, char **argv)
 		    "bosd: -B and -G describe the bar; they require -g\n");
 		usage();
 	}
+	if (!tflag && req.tcolor[0] != '\0') {
+		fprintf(stderr,
+		    "bosd: -F colors the small text; it requires -t\n");
+		usage();
+	}
 
-	/* Gauge alone: no icon operand, no -c, no -t. */
-	if (req.gauge >= 0 && count == 0 && !tflag && argc == 0) {
+	/* Gauge alone: no icon operand, no -c, no -T, no -t. */
+	if (req.gauge >= 0 && count == 0 && !tflag && !Tflag &&
+	    argc == 0) {
 		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
 		    req.append[0] != '\0' || req.scale != 1.0 ||
 		    !req.outline) {
@@ -242,20 +264,28 @@ main(int argc, char **argv)
 		return (run_bar(&req));
 	}
 
-	if (count > 0 || tflag) {
+	if (count > 0 || tflag || Tflag) {
 		const char *holdarg = NULL;
 
-		if (count > 0 && tflag)
+		if ((count > 0 && (tflag || Tflag)) || (tflag && Tflag))
 			usage();
-		if (tflag) {
+		if (tflag && (req.badge[0] != '\0' ||
+		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
+		    req.scale != 1.0 || !req.outline)) {
+			fprintf(stderr, "bosd: -b, -o, -s, -a, -p adorn "
+			    "the large artwork; they do not apply to -t\n");
+			usage();
+		}
+		if (tflag || Tflag) {
 			if (argc < 1 || argc > 2)
 				usage();
 			if (argv[0][0] == '\0' ||
 			    strlen(argv[0]) >= sizeof(req.spec) ||
 			    argv[0][strcspn(argv[0], " \t\n")] != '\0') {
-				fprintf(stderr, "bosd: -t text must be "
+				fprintf(stderr, "bosd: -%c text must be "
 				    "1 to %zu characters, no whitespace "
 				    "(escape it: \\x20)\n",
+				    tflag ? 't' : 'T',
 				    sizeof(req.spec) - 1);
 				usage();
 			}
@@ -270,7 +300,8 @@ main(int argc, char **argv)
 				holdarg = argv[0];
 		}
 		req.count = count;
-		req.text = tflag;
+		req.text = Tflag;
+		req.small = tflag;
 		if (holdarg != NULL) {
 			char *ep;
 
@@ -296,7 +327,9 @@ main(int argc, char **argv)
 		decode_field(req.badge, sizeof(req.badge));
 		decode_field(req.prefix, sizeof(req.prefix));
 		decode_field(req.append, sizeof(req.append));
-		return (tflag ? run_text(&req) : run_countdown(&req));
+		if (tflag)
+			return (run_stext(&req));
+		return (Tflag ? run_text(&req) : run_countdown(&req));
 	}
 
 	if (argc < 1 || argc > 2)

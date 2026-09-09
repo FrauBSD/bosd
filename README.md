@@ -4,15 +4,15 @@ On-screen display engine for BSD desktops.
 
 `bosd` flashes transient, click-through feedback over the desktop,
 the kind a desktop environment shows for media keys and hotkeys: a
-PNG glyph, giant countdown digits, or short outlined text (e.g. a
-checkmark) in a centered ARGB32 overlay on the primary or internal
-panel, plus a gauge bar (the classic xosd tick look) for
-volume/brightness levels. A warm daemon per channel keeps
-everything on screen and repaints in place, so rapid toggles
-never flash; the gauge and the artwork run independent timers and
-coexist. When a daemon is warm, a client invocation hands off the
-request and returns immediately; without one, the same command
-draws the OSD itself.
+PNG glyph, or giant countdown digits, or large outlined text (e.g.
+a checkmark), or small caption text (a screenshot's filename), or
+a gauge bar (the classic xosd tick look) at the panel bottom in a
+centered ARGB32 overlay on the primary or internal panel. A warm
+daemon per channel keeps everything on screen and repaints in
+place, so rapid toggles never flash; the gauge and the artwork run
+independent timers and coexist. When a daemon is warm, a client
+invocation hands off the request and returns immediately; without
+one, the same command draws the OSD itself.
 
 Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
 
@@ -41,7 +41,9 @@ bosd -n audio -x -300 audio-speakers    # shift left 300 px (positive = right)
 bosd -n audio -s 2.0 audio-speakers     # twice the panel-derived size
 bosd -n audio -o audio-speakers         # no outline halo
 bosd -c 3                               # full-screen 3-2-1 countdown
-bosd -n shot -t '\u2713' 1              # big checkmark (escapes decode)
+bosd -n shot -T '\u2713' 1              # big checkmark (escapes decode)
+bosd -n shot -t 'Screenshot\x0ashot.png' 2 # small green caption lines
+bosd -n shot -F orange -t saved         # small text, another color
 bosd -n audio audio-speakers -1         # hold until -C or replaced
 bosd -n shot -C                         # clear the channel's active render
 bosd -D audio-speakers 1                # render directly, skip the daemon

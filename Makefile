@@ -18,7 +18,7 @@ LDLIBS=		-lX11 -lXrandr -lXrender -lXext -lpng ${XFT_LIBS}
 
 PROG=		bosd
 SRCS=		src/main.c src/daemon.c src/ipc.c src/png.c src/x11.c \
-		src/badge.c src/bar.c src/countdown.c
+		src/badge.c src/bar.c src/countdown.c src/stext.c
 OBJS=		${SRCS:.c=.o}
 MAN=		man/bosd.1
 
