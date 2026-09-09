@@ -3,17 +3,20 @@
 On-screen display engine for BSD desktops.
 
 `bosd` paints PNG glyphs (media-key feedback, mode toggles, status
-icons) in a centered, click-through ARGB32 overlay on the internal
-panel. A warm daemon per channel owns the window and replaces the
-visible glyph in place, so rapid toggles never flash. Clients are
-one-line socket sends with a painted fallback when no daemon runs.
+icons), giant countdown digits, and short outlined text (e.g. a
+checkmark) in a centered, click-through ARGB32 overlay on the
+primary or internal panel. A warm daemon per channel owns the
+window and replaces the visible show in place, so rapid toggles
+never flash. Clients are one-line socket sends with a painted
+fallback when no daemon runs.
 
 Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
 
 ## Requirements
 
-- X11 (Xrandr, Xrender, Xext shape), libpng
+- X11 (Xrandr, Xrender, Xext shape), Xft + fontconfig, libpng
 - A compositor (e.g. picom) for translucency; opaque without one
+- Python 3 (stdlib only) to author glyphs with `tools/glyph.py`
 
 ## Build / install
 

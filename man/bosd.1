@@ -25,10 +25,19 @@
 .Op Ar hold_seconds
 .Sh DESCRIPTION
 .Nm
-paints a PNG glyph, scaled to the internal panel and outlined for
+paints a PNG glyph, scaled to the panel and outlined for
 legibility, in a centered click-through ARGB32 overlay window.
-It is the display engine behind media-key and hotkey feedback: a
-warm daemon owns the window, and clients replace the visible glyph
+The overlay is centered on the primary output, falling back to the
+first connected internal panel (eDP/LVDS/DSI), then the whole X
+screen.
+Countdown digits
+.Pq Fl c
+and short outlined text
+.Pq Fl t
+draw in the same overlay.
+.Nm
+is the display engine behind media-key and hotkey feedback: a
+warm daemon owns the window, and clients replace the visible show
 in place, so rapid key repeats never flash.
 .Pp
 The options are as follows:
@@ -187,6 +196,19 @@ bosd -n airplane airplane-on 1.5
 Show the second headphone output:
 .Bd -literal -offset indent
 bosd -n audio -b 2 audio-headphones 1.5
+.Ed
+.Pp
+Screenshot flow: count down from 3, capture, confirm with a
+checkmark:
+.Bd -literal -offset indent
+bosd -n shot -c 3
+scrot screenshot.png
+bosd -n shot -t '\eu2713' 1
+.Ed
+.Pp
+Clear whatever the channel is showing:
+.Bd -literal -offset indent
+bosd -n shot -C
 .Ed
 .Sh SEE ALSO
 .Xr xrandr 1
