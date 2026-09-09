@@ -42,7 +42,7 @@ bosd -n audio -s 2.0 audio-speakers     # twice the panel-derived size
 bosd -n audio -o audio-speakers         # no outline halo
 bosd -c 3                               # full-screen 3-2-1 countdown
 bosd -n shot -t '\u2713' 1              # big checkmark (escapes decode)
-bosd -n audio audio-speakers -1         # hold until -C, replaced, or ^C
+bosd -n audio audio-speakers -1         # hold until -C or replaced
 bosd -n shot -C                         # clear the channel's active render
 bosd -D audio-speakers 1                # render directly, skip the daemon
 bosd -p 'Shutdown in' -b s -c 10        # caption over a 10 s countdown
@@ -50,8 +50,7 @@ bosd -n airplane -a 'airplane mode off' airplane-off  # caption below
 bosd -n volume -g 45                    # gauge bar, 45%, default green
 bosd -n volume -g 115 -G '#CC2222'      # red bar, "115%" past its edge
 bosd -g 45 -G red -B 3 audio-headphones # glyph + bar, each its own hold
-
-bosd /path/to/glyph.png          # one-shot, absolute path
+bosd /path/to/glyph.png                 # one-shot, absolute path
 ```
 
 Bare names resolve through `BOSD_PATH`, then the compiled share
