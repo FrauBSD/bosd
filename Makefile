@@ -10,12 +10,12 @@ EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
 CC?=		cc
 CFLAGS?=	-O2 -Wall -Wextra
 PKG_CONFIG?=	pkg-config
-XFT_CFLAGS!=	${PKG_CONFIG} --cflags xft fontconfig
-XFT_LIBS!=	${PKG_CONFIG} --libs xft fontconfig
-CPPFLAGS+=	-I/usr/local/include -DBOSD_ICONDIR='"${ICONDIR}"' \
-		${XFT_CFLAGS}
-LDFLAGS+=	-L/usr/local/lib
-LDLIBS=		-lX11 -lXrandr -lXrender -lXext -lpng ${XFT_LIBS}
+# Includes and libs come from pkg-config only (no hard-coded PREFIX paths).
+PKGS=		x11 xrandr xrender xext xft fontconfig libpng
+PKG_CFLAGS!=	${PKG_CONFIG} --cflags ${PKGS}
+PKG_LIBS!=	${PKG_CONFIG} --libs ${PKGS}
+CPPFLAGS+=	-DBOSD_ICONDIR='"${ICONDIR}"' ${PKG_CFLAGS}
+LDLIBS=		${PKG_LIBS}
 
 PROG=		bosd
 SRCS=		src/main.c src/daemon.c src/ipc.c src/png.c src/x11.c \
