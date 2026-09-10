@@ -299,10 +299,10 @@ main(int argc, char **argv)
 		    "bosd: -B, -G, and -P describe the bar; they require -g\n");
 		usage();
 	}
-	if (req.tcolor[0] != '\0' && !tflag && !Tflag &&
+	if (req.tcolor[0] != '\0' && !tflag && !Tflag && count == 0 &&
 	    req.badge[0] == '\0') {
 		fprintf(stderr,
-		    "bosd: -F colors -t/-T text or a -b badge\n");
+		    "bosd: -F colors -c/-t/-T text or a -b badge\n");
 		usage();
 	}
 

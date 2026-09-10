@@ -187,8 +187,8 @@ the badge sits at the digits' upper right and
 .Fl s
 scales the digits;
 .Fl F
-colors the badge
-.Pq not the digits .
+colors the digits and badge
+.Pq default white .
 .It Fl D
 Render directly in the invoking process, ignoring any running
 channel daemon, and exit when the hold elapses.
@@ -205,11 +205,14 @@ a name or #rrggbb.
 On
 .Fl t
 the default is green; on
-.Fl T
+.Fl c ,
+.Fl T ,
 and
 .Fl b
 the default is white.
 Applies to
+.Fl c
+digits,
 .Fl t
 and
 .Fl T

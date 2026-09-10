@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"4.7"
+#define BOSD_VERSION	"4.8"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
@@ -51,7 +51,7 @@ struct bosd_req {
 	int	 gauge;		/* >=0: bar percent; -1 = no bar */
 	double	 gauge_hold;	/* bar's own hold */
 	char	 color[BOSD_COLOR_MAX];	/* bar fill */
-	char	 tcolor[BOSD_COLOR_MAX];	/* -t/-T/-b fill color */
+	char	 tcolor[BOSD_COLOR_MAX];	/* -c/-t/-T/-b fill color */
 	int	 x_off;		/* pixels; positive right */
 	int	 y_off;		/* pixels; positive down */
 	char	 spec[BOSD_SPEC_MAX];	/* icon path/name or text */

@@ -23,7 +23,7 @@ static int	 stroke, cstroke;
 static int	 lock_len, lock_x, lock_bx;
 static double	 fill_alpha = 1.0, outline_alpha = 1.0;
 static char	 text_buf[BOSD_SPEC_MAX];
-static char	 text_color[BOSD_COLOR_MAX];	/* -T fill; digits stay white */
+static char	 text_color[BOSD_COLOR_MAX];	/* -c/-T fill */
 static char	 badge_color[BOSD_COLOR_MAX];
 
 static void
@@ -333,13 +333,11 @@ countdown_begin(const struct show_req *req)
 	stroke = req->outline ? stroke_for(pointsize) : 0;
 	fill_alpha = req->alpha >= 0.0 ? req->alpha : 1.0;
 	outline_alpha = req->outline_alpha;
-	/* -T uses -F; countdown digits stay white. Badge takes -F. */
+	/* -c/-T and -b take -F; default white. */
 	strlcpy(text_color, "white", sizeof(text_color));
-	if (req->text && req->tcolor[0] != '\0')
-		strlcpy(text_color, req->tcolor, sizeof(text_color));
-	strlcpy(badge_color, "white", sizeof(badge_color));
 	if (req->tcolor[0] != '\0')
-		strlcpy(badge_color, req->tcolor, sizeof(badge_color));
+		strlcpy(text_color, req->tcolor, sizeof(text_color));
+	strlcpy(badge_color, text_color, sizeof(badge_color));
 	if (req->badge[0] != '\0') {
 		char pattern[128];
 		int bps = pointsize * 26 / 100;
@@ -416,7 +414,7 @@ countdown_tick(const struct show_req *req, int digit)
 		    req->x_off;
 	}
 	y = (win_h + font->ascent - font->descent) / 2 + req->y_off;
-	draw_outlined(font, x, y, buf, stroke, "white");
+	draw_outlined(font, x, y, buf, stroke, text_color);
 
 	/* Badge superscript off the digits' upper right (slot-stable). */
 	if (bfont != NULL) {
