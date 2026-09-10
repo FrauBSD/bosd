@@ -30,10 +30,11 @@ PROG=		bosd
 PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
 		src/badge.c src/bar.c src/countdown.c src/stext.c
 PROGOBJS=	${PROGSRCS:.c=.o}
+MANIN=		man/bosd.1.in
 MAN=		man/bosd.1
 MAN3=		man/bosd.3
 
-all: ${SHLIB} libbosd.so ${PROG} bosd.pc
+all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN}
 
 ${SHLIB}: ${LIBOBJS}
 	${CC} -shared -Wl,-soname,${SHLIB} -o ${SHLIB} ${LIBOBJS}
@@ -51,6 +52,9 @@ ${LIBOBJS}: CFLAGS+= -fPIC
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 ${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h
+
+${MAN}: ${MANIN} Makefile
+	sed -e 's|@PREFIX@|${PREFIX}|g' ${MANIN} > ${MAN}
 
 bosd.pc: Makefile
 	@printf '%s\n' \
@@ -88,7 +92,7 @@ examples/bsd.png: examples/bsd.py tools/glyph.py
 
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
-		examples/bsd.png
+		${MAN} examples/bsd.png
 	rm -rf tools/__pycache__ examples/__pycache__
 
 .PHONY: all install clean example

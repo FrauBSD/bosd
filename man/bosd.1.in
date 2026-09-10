@@ -373,9 +373,9 @@ X11 display to draw on.
 request socket
 .It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .pid
 daemon pid
-.It Pa /usr/local/share/bosd
+.It Pa @PREFIX@/share/bosd
 default icon directory
-.It Pa /usr/local/share/examples/bosd
+.It Pa @PREFIX@/share/examples/bosd
 glyph authoring example
 .Pq Pa bsd.py
 and the shared rasterizer
@@ -431,7 +431,7 @@ Build the example glyph
 .Pq the letters BSD in FreeBSD red at 80% opacity on a transparent ground
 and flash it:
 .Bd -literal -offset indent
-python3 /usr/local/share/examples/bosd/bsd.py bsd.png
+python3 @PREFIX@/share/examples/bosd/bsd.py bsd.png
 bosd bsd.png
 .Ed
 .Sh SEE ALSO

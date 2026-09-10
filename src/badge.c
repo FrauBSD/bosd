@@ -19,7 +19,6 @@ open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
 {
 	char pattern[256];
 	XftFont *font;
-	const char *file = "/usr/local/share/fonts/dejavu/DejaVuSans-Bold.ttf";
 
 	if (*slot != NULL && *slot_px == pixelsize)
 		return (*slot);
@@ -30,13 +29,8 @@ open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
 	}
 
 	snprintf(pattern, sizeof(pattern),
-	    "file=%s:pixelsize=%d:antialias=true", file, pixelsize);
+	    "DejaVu Sans:bold:pixelsize=%d:antialias=true", pixelsize);
 	font = XftFontOpenName(dpy, screen, pattern);
-	if (font == NULL) {
-		snprintf(pattern, sizeof(pattern),
-		    "DejaVu Sans:bold:pixelsize=%d:antialias=true", pixelsize);
-		font = XftFontOpenName(dpy, screen, pattern);
-	}
 	if (font == NULL) {
 		snprintf(pattern, sizeof(pattern),
 		    "Sans:bold:pixelsize=%d:antialias=true", pixelsize);

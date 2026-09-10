@@ -14,7 +14,7 @@
 #define BOSD_MSG_MAX	1696
 
 #ifndef BOSD_ICONDIR
-#define BOSD_ICONDIR	"/usr/local/share/bosd"
+#error "BOSD_ICONDIR must be set by the Makefile (-DBOSD_ICONDIR=...)"
 #endif
 
 /* Internal name kept for the existing call sites. */

@@ -6,3 +6,4 @@ bosd.pc
 examples/*.png
 libbosd.so
 libbosd.so.*
+man/bosd.1
