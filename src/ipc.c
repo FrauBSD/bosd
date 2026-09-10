@@ -21,11 +21,15 @@
  * "CLEAR" hides the active render(s).  A show with clear set sends
  * CLEAR first so artwork, gauge, and caption all drop before the
  * new paint.  A gauge travels separately as "BAR HOLD XOFF YOFF PCT
- * COLOR [PREV]" and coexists with the artwork and with small text.
- * Small text (CNT -2) is its own slot: only another caption or CLEAR
- * replaces it.  PREV is an optional prior-percent watermark (-1 or
- * omitted disables); the daemon latches the first PREV when the bar
- * appears and ignores later ones until the bar hides.
+ * COLOR PREV ALPHA OALPHA OUTL" and coexists with the artwork and
+ * with small text.  Small text (CNT -2) is its own slot: only another
+ * caption or CLEAR replaces it.  PREV is a prior-percent watermark
+ * (-1 disables); the daemon latches the first PREV when the bar
+ * appears and ignores later ones until the bar hides.  ALPHA < 0
+ * means full fill opacity on the bar (native PNG does not apply);
+ * otherwise 0..1 fill opacity.  OALPHA is the black outline opacity
+ * (0..1, default 1).  OUTL 1 draws the tick outline and 0 skips it
+ * (-o).
  */
 #include <signal.h>
 #include <stdio.h>
@@ -156,10 +160,12 @@ send_show_to(const char *sock, const struct show_req *req)
 		return (-1);
 
 	if (req->gauge >= 0) {
-		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s %d",
+		snprintf(msg, sizeof(msg),
+		    "BAR %.2f %d %d %d %s %d %.3f %.3f %d",
 		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
 		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
-		    req->gauge_prev);
+		    req->gauge_prev, req->alpha, req->outline_alpha,
+		    req->outline);
 		if (send_dgram(sock, msg) != 0)
 			return (-1);
 		/* Gauge alone, or artwork too? */
@@ -222,22 +228,47 @@ parse_show(const char *buf, struct show_req *req)
 		return (0);
 	}
 	if (strncmp(buf, "BAR ", 4) == 0) {
+		double alpha, oalpha;
+		int outline;
+
 		memset(req, 0, sizeof(*req));
 		req->gauge_prev = -1;
-		req->alpha = BOSD_ALPHA_NATIVE;
-		req->outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
-		n = sscanf(buf + 4, "%lf %d %d %d %31s %d", &hold, &x_off,
-		    &y_off, &req->gauge, req->color, &req->gauge_prev);
+		alpha = BOSD_ALPHA_NATIVE;
+		oalpha = BOSD_OUTLINE_ALPHA_DEF;
+		outline = 1;
+		n = sscanf(buf + 4, "%lf %d %d %d %31s %d %lf %lf %d",
+		    &hold, &x_off, &y_off, &req->gauge, req->color,
+		    &req->gauge_prev, &alpha, &oalpha, &outline);
 		if (n < 5 || req->gauge < 0)
 			return (-1);
 		if (n < 6)
 			req->gauge_prev = -1;
+		if (n < 7)
+			alpha = BOSD_ALPHA_NATIVE;
+		if (n < 8)
+			oalpha = BOSD_OUTLINE_ALPHA_DEF;
+		if (n < 9)
+			outline = 1;
 		if (hold != -1.0 && hold <= 0.0)
 			hold = BOSD_GAUGE_HOLD_DEF;
+		if (alpha >= 0.0) {
+			if (alpha < BOSD_ALPHA_MIN)
+				alpha = BOSD_ALPHA_MIN;
+			if (alpha > BOSD_ALPHA_MAX)
+				alpha = BOSD_ALPHA_MAX;
+		} else
+			alpha = BOSD_ALPHA_NATIVE;
+		if (oalpha < BOSD_ALPHA_MIN)
+			oalpha = BOSD_ALPHA_MIN;
+		if (oalpha > BOSD_ALPHA_MAX)
+			oalpha = BOSD_ALPHA_MAX;
 		req->hold = hold;
 		req->gauge_hold = hold;
 		req->x_off = x_off;
 		req->y_off = y_off;
+		req->alpha = alpha;
+		req->outline_alpha = oalpha;
+		req->outline = outline != 0;
 		return (0);
 	}
 

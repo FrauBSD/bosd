@@ -28,9 +28,10 @@ usage(void)
 	    "            [-G color] [-g percent] [-P percent] [-s scale] "
 	    "[-x offset] \\\n"
 	    "            [-y offset] -t text [hold_seconds]\n"
-	    "       bosd [-CDhv] [-n instance] [-B seconds] [-G color] "
-	    "[-P percent] \\\n"
-	    "            [-x offset] [-y offset] -g percent\n");
+	    "       bosd [-CDhov] [-n instance] [-A opacity] [-B seconds] "
+	    "[-G color] \\\n"
+	    "            [-O opacity] [-P percent] [-x offset] [-y offset] "
+	    "-g percent\n");
 	exit(1);
 }
 
@@ -360,12 +361,9 @@ main(int argc, char **argv)
 	    argc == 0) {
 		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
 		    req.append[0] != '\0' || req.font[0] != '\0' ||
-		    req.scale != 1.0 ||
-		    req.alpha >= 0.0 ||
-		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
-		    !req.outline) {
+		    req.scale != 1.0) {
 			fprintf(stderr,
-			    "bosd: -A, -O, -b, -f, -o, -s, -a, -p adorn "
+			    "bosd: -b, -f, -s, -a, -p adorn "
 			    "the artwork, not the bar\n");
 			usage();
 		}

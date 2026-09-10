@@ -1,28 +1,33 @@
 /*
  * Gauge bar: the classic tick-bar OSD.  56 ticks bottom-centered
  * on the panel, 64px up, sized from 52px fixed-font metrics; tall
- * ticks fill to the given percentage, the rest stay short, all
- * black-outlined.  bosd assigns the bar no meaning: it draws the
- * given percentage in the given color.  Above 100% the fill stays
- * full and "N%" sits just past the bar's right edge in the same
- * color, vertically centered on the gauge bar.
+ * ticks fill to the given percentage, the rest stay short.  By
+ * default ticks (and the overage label) carry a black outline; -A
+ * sets fill opacity, -O the outline's, and -o skips the outline.
+ * bosd assigns the bar no meaning: it draws the given percentage
+ * in the given color.  Above 100% the fill stays full and "N%"
+ * sits just past the bar's right edge in the same color,
+ * vertically centered on the gauge bar.
  *
  * An optional previous percent (daemon-latched for a bar session)
  * marks short ticks at or above that watermark in a 50% dimmer
  * shade of the fill; short ticks between the current fill and the
  * watermark stay full color.  Tall ticks are never dimmed.
  *
- * The bar owns its window, so a gauge and a glyph coexist on one
- * channel; drawn pixels become the XShape bounding mask.
+ * The bar owns an ARGB window so a gauge and a glyph coexist on
+ * one channel; translucency comes from the pixel alpha, not a
+ * 1-bit shape mask.
  */
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/Xrender.h>
 #include <X11/extensions/shape.h>
 
 #include "priv.h"
@@ -35,10 +40,12 @@
 #define TEXT_XOFF  10	/* label inset within its slot */
 
 static Window	 bwin;
-static Pixmap	 pix, mask;
-static GC	 pgc, mgc;
+static Pixmap	 bpix;		/* ARGB backing; survives Expose */
+static Colormap	 bcmap;
+static Visual	*bvisual;
 static XFontSet	 fset;
 static int	 ascent, lineh;	/* -extent.y and drawn line height */
+static int	 bdepth;
 static int	 bmapped;
 
 /* The classic bar's metrics: tick pitch is half the font ascent. */
@@ -105,92 +112,217 @@ shaped_window(int x, int y, int w, int h)
 	return (swin);
 }
 
-/* One tick into the pixmap and the shape mask. */
-static void
-bar_tick(int i, int bx, int grow, int tall)
+/* ARGB click-through window for translucent ticks. */
+static Window
+bar_window(int x, int y, int w, int h)
 {
-	XRectangle r;
+	XSetWindowAttributes wa;
+	Atom net_wm_state, states[3];
+	Window swin;
+	int screen = DefaultScreen(dpy);
+
+	bvisual = find_argb_visual(&bdepth);
+	if (bvisual == NULL)
+		return (0);
+	if (bcmap != None)
+		XFreeColormap(dpy, bcmap);
+	bcmap = XCreateColormap(dpy, RootWindow(dpy, screen), bvisual,
+	    AllocNone);
+	wa.colormap = bcmap;
+	wa.border_pixel = 0;
+	wa.background_pixel = 0;
+	wa.override_redirect = True;
+	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
+	    (unsigned)w, (unsigned)h, 0, bdepth, InputOutput, bvisual,
+	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect,
+	    &wa);
+	if (swin == 0)
+		return (0);
+	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
+	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
+	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
+	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
+	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
+	    PropModeReplace, (unsigned char *)states, 3);
+	XStoreName(dpy, swin, "bosd");
+	/* Click-through; bounding is the full window (alpha does the rest). */
+	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
+	    ShapeSet, Unsorted);
+	{
+		XRectangle rect;
+
+		rect.x = 0;
+		rect.y = 0;
+		rect.width = (unsigned short)w;
+		rect.height = (unsigned short)h;
+		XShapeCombineRectangles(dpy, swin, ShapeBounding, 0, 0,
+		    &rect, 1, ShapeSet, Unsorted);
+	}
+	return (swin);
+}
+
+/* Replace a rectangle in an ARGB picture (outline then fill). */
+static void
+fill_rect_pic(Picture pic, int x, int y, int fw, int fh, unsigned char r,
+    unsigned char g, unsigned char b, unsigned char a)
+{
+	XRenderColor c;
+
+	if (a == 0 || fw <= 0 || fh <= 0)
+		return;
+	/*
+	 * ARGB32 pictures store premultiplied color.  XRenderColor is
+	 * documented as straight, but filling through PictOpSrc on this
+	 * path left full-brightness RGB at low alpha (picom then paints
+	 * an over-bright tick).  Multiply here so -A 0.1 is actually dim.
+	 */
+	c.red = (unsigned short)((r * 257 * (unsigned)a) / 255);
+	c.green = (unsigned short)((g * 257 * (unsigned)a) / 255);
+	c.blue = (unsigned short)((b * 257 * (unsigned)a) / 255);
+	c.alpha = (unsigned short)(a * 257);
+	XRenderFillRectangle(dpy, PictOpSrc, pic, &c, x, y, fw, fh);
+}
+
+/* One tick into the ARGB picture. */
+static void
+bar_tick(Picture pic, int i, int bx, int grow, int tall, unsigned char r,
+    unsigned char g, unsigned char b, unsigned char a)
+{
 	int x = bx + i * (ascent / 2);
+	int rx, ry, rwi, rhi;
 
 	if (tall) {
-		r.x = (short)(x - grow);
-		r.y = (short)(0 - grow + BAR_OUTL);
-		r.width = (unsigned short)
-		    ((ascent / 2) * 7 / 10 + 2 * grow);
-		r.height = (unsigned short)(ascent + 2 * grow);
+		rx = x - grow;
+		ry = 0 - grow + BAR_OUTL;
+		rwi = (ascent / 2) * 7 / 10 + 2 * grow;
+		rhi = ascent + 2 * grow;
 	} else {
-		r.x = (short)(x - grow);
-		r.y = (short)(ascent / 3 - grow + BAR_OUTL);
-		r.width = (unsigned short)
-		    ((ascent / 2) * 8 / 10 + 2 * grow);
-		r.height = (unsigned short)(ascent / 3 + 2 * grow);
+		rx = x - grow;
+		ry = ascent / 3 - grow + BAR_OUTL;
+		rwi = (ascent / 2) * 8 / 10 + 2 * grow;
+		rhi = ascent / 3 + 2 * grow;
 	}
-	XFillRectangle(dpy, pix, pgc, r.x, r.y, r.width, r.height);
-	XFillRectangle(dpy, mask, mgc, r.x, r.y, r.width, r.height);
+	fill_rect_pic(pic, rx, ry, rwi, rhi, r, g, b, a);
 }
 
 /*
- * Outline every tick, then color: tall always fill; short ticks at or
- * past the previous watermark use dim, the rest (return zone) fill.
- * prev_on < 0 disables the watermark.
+ * Outline every tick (when out_a > 0), then color: tall always fill;
+ * short ticks at or past the previous watermark use dim, the rest
+ * (return zone) fill.  prev_on < 0 disables the watermark.
  */
 static void
-bar_paint(int on, int prev_on, int bx, unsigned long fill,
-    unsigned long dim, unsigned long black)
+bar_paint(Picture pic, int on, int prev_on, int bx, unsigned char fr,
+    unsigned char fg, unsigned char fb, unsigned char fa, unsigned char dr,
+    unsigned char dg, unsigned char db, unsigned char out_a)
 {
 	int i;
 
-	XSetForeground(dpy, pgc, black);
-	for (i = 0; i < BAR_TICKS; i++)
-		bar_tick(i, bx, BAR_OUTL, i < on);
-
-	for (i = 0; i < on; i++) {
-		XSetForeground(dpy, pgc, fill);
-		bar_tick(i, bx, 0, 1);
+	if (out_a > 0) {
+		for (i = 0; i < BAR_TICKS; i++)
+			bar_tick(pic, i, bx, BAR_OUTL, i < on, 0, 0, 0, out_a);
 	}
+	for (i = 0; i < on; i++)
+		bar_tick(pic, i, bx, 0, 1, fr, fg, fb, fa);
 	for (; i < BAR_TICKS; i++) {
-		XSetForeground(dpy, pgc,
-		    (prev_on >= 0 && i >= prev_on) ? dim : fill);
-		bar_tick(i, bx, 0, 0);
+		if (prev_on >= 0 && i >= prev_on)
+			bar_tick(pic, i, bx, 0, 0, dr, dg, db, fa);
+		else
+			bar_tick(pic, i, bx, 0, 0, fr, fg, fb, fa);
 	}
 }
 
-/* 50% dimmer shade of src (half of each 16-bit channel). */
-static unsigned long
-dim_pixel(Colormap cmap, XColor src, unsigned long fallback)
-{
-	XColor d;
-
-	d.red = src.red / 2;
-	d.green = src.green / 2;
-	d.blue = src.blue / 2;
-	d.flags = DoRed | DoGreen | DoBlue;
-	if (XAllocColor(dpy, cmap, &d))
-		return (d.pixel);
-	return (fallback);
-}
-
-/* Overage label: square black outline passes, then the fill. */
+/*
+ * Fixed-font label: ink from a scratch pixmap, stamped with
+ * XRenderFillRectangle so alpha stays intact (XPutImage drops it).
+ */
 static void
-bar_label(const char *s, int x, int base, int grow_pass, unsigned long pixel)
+stamp_label(Picture pic, int rw, int rh, const char *s, int x, int base,
+    unsigned char r, unsigned char g, unsigned char b, unsigned char a,
+    int grow_pass)
 {
-	int len = (int)strlen(s), dx, dy;
+	Pixmap tmp;
+	GC tgc;
+	XImage *img;
+	int screen = DefaultScreen(dpy);
+	int depth = DefaultDepth(dpy, screen);
+	unsigned long bg = WhitePixel(dpy, screen);
+	unsigned long fg = BlackPixel(dpy, screen);
+	int len = (int)strlen(s), dx, dy, xi, yi;
 
-	XSetForeground(dpy, pgc, pixel);
+	if (a == 0)
+		return;
+	tmp = XCreatePixmap(dpy, RootWindow(dpy, screen), (unsigned)rw,
+	    (unsigned)rh, depth);
+	if (tmp == 0)
+		return;
+	tgc = XCreateGC(dpy, tmp, 0, NULL);
+	XSetForeground(dpy, tgc, bg);
+	XFillRectangle(dpy, tmp, tgc, 0, 0, (unsigned)rw, (unsigned)rh);
+	XSetForeground(dpy, tgc, fg);
 	if (grow_pass) {
 		for (dx = -BAR_OUTL; dx <= BAR_OUTL; dx++)
 			for (dy = -BAR_OUTL; dy <= BAR_OUTL; dy++) {
 				if (dx == 0 && dy == 0)
 					continue;
-				XmbDrawString(dpy, pix, fset, pgc, x + dx,
-				    base + dy, s, len);
-				XmbDrawString(dpy, mask, fset, mgc, x + dx,
+				XmbDrawString(dpy, tmp, fset, tgc, x + dx,
 				    base + dy, s, len);
 			}
-	} else {
-		XmbDrawString(dpy, pix, fset, pgc, x, base, s, len);
-		XmbDrawString(dpy, mask, fset, mgc, x, base, s, len);
+	} else
+		XmbDrawString(dpy, tmp, fset, tgc, x, base, s, len);
+
+	img = XGetImage(dpy, tmp, 0, 0, (unsigned)rw, (unsigned)rh,
+	    AllPlanes, ZPixmap);
+	XFreeGC(dpy, tgc);
+	XFreePixmap(dpy, tmp);
+	if (img == NULL)
+		return;
+	for (yi = 0; yi < rh; yi++) {
+		for (xi = 0; xi < rw; xi++) {
+			if (XGetPixel(img, xi, yi) == bg)
+				continue;
+			fill_rect_pic(pic, xi, yi, 1, 1, r, g, b, a);
+		}
 	}
+	XDestroyImage(img);
+}
+
+/*
+ * Build the bar in an ARGB32 picture (XRender fills keep alpha), blit
+ * to the mapped window, and keep the pixmap as background for Expose.
+ */
+static int
+paint_bar(Picture src_pic, Pixmap pix, int w, int h)
+{
+	XRenderPictFormat *fmt;
+	Picture dst;
+	XRenderColor clear;
+	XRectangle rect;
+
+	fmt = XRenderFindVisualFormat(dpy, bvisual);
+	if (fmt == NULL)
+		return (-1);
+	dst = XRenderCreatePicture(dpy, bwin, fmt, 0, NULL);
+	clear.red = clear.green = clear.blue = clear.alpha = 0;
+	XRenderFillRectangle(dpy, PictOpSrc, dst, &clear, 0, 0, w, h);
+	XRenderComposite(dpy, PictOpSrc, src_pic, None, dst, 0, 0, 0, 0, 0, 0,
+	    w, h);
+	XRenderFreePicture(dpy, dst);
+
+	if (bpix != 0 && bpix != pix) {
+		XSetWindowBackgroundPixmap(dpy, bwin, None);
+		XFreePixmap(dpy, bpix);
+	}
+	bpix = pix;
+	XSetWindowBackgroundPixmap(dpy, bwin, bpix);
+
+	rect.x = 0;
+	rect.y = 0;
+	rect.width = (unsigned short)w;
+	rect.height = (unsigned short)h;
+	XShapeCombineRectangles(dpy, bwin, ShapeBounding, 0, 0, &rect, 1,
+	    ShapeSet, Unsorted);
+	XFlush(dpy);
+	return (0);
 }
 
 static int
@@ -206,61 +338,70 @@ pct_ticks(int pct)
 int
 bar_show(const struct show_req *req)
 {
+	XRenderPictFormat *fmt;
+	XRenderColor clear;
 	XColor col, exact;
 	Colormap cmap;
+	Picture pic;
+	Pixmap pix;
 	char label[16];
-	int screen = DefaultScreen(dpy), depth;
+	int screen = DefaultScreen(dpy);
 	int on, prev_on, bx, x, y, w;
-	unsigned long fill_px, dim_px, black;
+	unsigned char fr, fg, fb, fa, dr, dg, db, oa;
+	double fill_a;
 
 	if (bar_metrics() != 0)
 		return (-1);
 	w = scr_w;
 	x = scr_x + req->x_off;
 	y = scr_y + scr_h - lineh - BAR_VOFF + req->y_off;
-	if (bwin == 0 && (bwin = shaped_window(x, y, w, lineh)) == 0)
+	if (bwin == 0 && (bwin = bar_window(x, y, w, lineh)) == 0)
 		return (-1);
 	XMoveResizeWindow(dpy, bwin, x, y, (unsigned)w, (unsigned)lineh);
 
-	depth = DefaultDepth(dpy, screen);
-	/* Detach before free: the pixmap may still be the window background. */
-	if (pix != 0) {
-		XSetWindowBackgroundPixmap(dpy, bwin, None);
-		XFreePixmap(dpy, pix);
-		pix = 0;
-	}
-	if (mask != 0) {
-		XFreePixmap(dpy, mask);
-		mask = 0;
-	}
-	pix = XCreatePixmap(dpy, bwin, (unsigned)w, (unsigned)lineh, depth);
-	mask = XCreatePixmap(dpy, bwin, (unsigned)w, (unsigned)lineh, 1);
-	if (pgc == None)
-		pgc = XCreateGC(dpy, pix, 0, NULL);
-	if (mgc == None)
-		mgc = XCreateGC(dpy, mask, 0, NULL);
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return (-1);
+	pix = XCreatePixmap(dpy, bwin, (unsigned)w, (unsigned)lineh, 32);
+	pic = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	clear.red = clear.green = clear.blue = clear.alpha = 0;
+	XRenderFillRectangle(dpy, PictOpSrc, pic, &clear, 0, 0, w, lineh);
 
-	XSetForeground(dpy, mgc, 0);
-	XFillRectangle(dpy, mask, mgc, 0, 0, (unsigned)w, (unsigned)lineh);
-	XSetForeground(dpy, mgc, 1);
+	fill_a = req->alpha >= 0.0 ? req->alpha : 1.0;
+	if (fill_a < BOSD_ALPHA_MIN)
+		fill_a = BOSD_ALPHA_MIN;
+	if (fill_a > BOSD_ALPHA_MAX)
+		fill_a = BOSD_ALPHA_MAX;
+	fa = (unsigned char)(fill_a * 255.0 + 0.5);
+	if (req->outline) {
+		double out_a = req->outline_alpha;
+
+		if (out_a < BOSD_ALPHA_MIN)
+			out_a = BOSD_ALPHA_MIN;
+		if (out_a > BOSD_ALPHA_MAX)
+			out_a = BOSD_ALPHA_MAX;
+		oa = (unsigned char)(out_a * 255.0 + 0.5);
+	} else
+		oa = 0;
 
 	cmap = DefaultColormap(dpy, screen);
-	black = BlackPixel(dpy, screen);
+	fr = fg = fb = 255;
 	if (XAllocNamedColor(dpy, cmap,
 	    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
 	    &col, &exact)) {
-		fill_px = col.pixel;
-		dim_px = dim_pixel(cmap, col, fill_px);
-	} else {
-		fill_px = WhitePixel(dpy, screen);
-		dim_px = fill_px;
+		fr = (unsigned char)(col.red >> 8);
+		fg = (unsigned char)(col.green >> 8);
+		fb = (unsigned char)(col.blue >> 8);
 	}
+	dr = fr / 2;
+	dg = fg / 2;
+	db = fb / 2;
 
 	on = pct_ticks(req->gauge);
 	prev_on = req->gauge_prev < 0 ? -1 : pct_ticks(req->gauge_prev);
 	bx = (w - BAR_TICKS * (ascent / 2)) / 2;
 
-	bar_paint(on, prev_on, bx, fill_px, dim_px, black);
+	bar_paint(pic, on, prev_on, bx, fr, fg, fb, fa, dr, dg, db, oa);
 
 	if (req->gauge > 100) {
 		XRectangle ink, logical;
@@ -277,18 +418,27 @@ bar_show(const struct show_req *req)
 		base = BAR_OUTL + ascent / 2 - (ink.y + ink.height / 2);
 		x = (w + BAR_TICKS * (ascent / 2)) / 2 + OVER_GAP +
 		    TEXT_XOFF;
-		bar_label(label, x, base, 1, black);
-		bar_label(label, x, base, 0, fill_px);
+		if (oa > 0)
+			stamp_label(pic, w, lineh, label, x, base, 0, 0, 0,
+			    oa, 1);
+		stamp_label(pic, w, lineh, label, x, base, fr, fg, fb, fa, 0);
 	}
 
-	XShapeCombineMask(dpy, bwin, ShapeBounding, 0, 0, mask, ShapeSet);
-	XSetWindowBackgroundPixmap(dpy, bwin, pix);
-	XClearWindow(dpy, bwin);
 	if (!bmapped) {
 		XMapRaised(dpy, bwin);
 		bmapped = 1;
+		XSync(dpy, False);
 	} else
 		XRaiseWindow(dpy, bwin);
+
+	if (paint_bar(pic, pix, w, lineh) != 0) {
+		XRenderFreePicture(dpy, pic);
+		XFreePixmap(dpy, pix);
+		return (-1);
+	}
+	XRenderFreePicture(dpy, pic);
+	/* pix retained as bpix inside paint_bar */
+	XRaiseWindow(dpy, bwin);
 	XSync(dpy, False);
 	return (0);
 }
@@ -305,20 +455,21 @@ bar_hide(void)
 	 * cached frame of the previous fill (seen as the last percent
 	 * after the bar had already timed out).
 	 */
-	if (pix != 0) {
+	if (bpix != 0) {
 		if (bwin != 0)
 			XSetWindowBackgroundPixmap(dpy, bwin, None);
-		XFreePixmap(dpy, pix);
-		pix = 0;
-	}
-	if (mask != 0) {
-		XFreePixmap(dpy, mask);
-		mask = 0;
+		XFreePixmap(dpy, bpix);
+		bpix = 0;
 	}
 	if (bwin != 0) {
 		XDestroyWindow(dpy, bwin);
 		bwin = 0;
 	}
+	if (bcmap != None) {
+		XFreeColormap(dpy, bcmap);
+		bcmap = None;
+	}
+	bvisual = NULL;
 	XSync(dpy, False);
 }
 
@@ -327,26 +478,21 @@ bar_cleanup(void)
 {
 	if (dpy == NULL)
 		return;
-	if (pgc != None) {
-		XFreeGC(dpy, pgc);
-		pgc = None;
-	}
-	if (mgc != None) {
-		XFreeGC(dpy, mgc);
-		mgc = None;
-	}
-	if (pix != 0) {
-		XFreePixmap(dpy, pix);
-		pix = 0;
-	}
-	if (mask != 0) {
-		XFreePixmap(dpy, mask);
-		mask = 0;
+	if (bpix != 0) {
+		if (bwin != 0)
+			XSetWindowBackgroundPixmap(dpy, bwin, None);
+		XFreePixmap(dpy, bpix);
+		bpix = 0;
 	}
 	if (bwin != 0) {
 		XDestroyWindow(dpy, bwin);
 		bwin = 0;
 	}
+	if (bcmap != None) {
+		XFreeColormap(dpy, bcmap);
+		bcmap = None;
+	}
+	bvisual = NULL;
 	if (fset != NULL) {
 		XFreeFontSet(dpy, fset);
 		fset = NULL;

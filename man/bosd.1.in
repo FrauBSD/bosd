@@ -48,10 +48,12 @@
 .Fl t Ar text
 .Op Ar hold_seconds
 .Nm
-.Op Fl CDhv
+.Op Fl CDhov
 .Op Fl n Ar instance
+.Op Fl A Ar opacity
 .Op Fl B Ar seconds
 .Op Fl G Ar color
+.Op Fl O Ar opacity
 .Fl g Ar percent
 .Op Fl P Ar percent
 .Op Fl x Ar offset
@@ -121,6 +123,13 @@ or
 .Fl A
 fades the fill
 .Pq default full without Fl A .
+On
+.Fl g ,
+.Fl A
+sets the tick
+.Pq and overage label
+fill opacity the same way
+.Pq default full without Fl A .
 A
 .Fl b
 badge on an
@@ -132,8 +141,9 @@ takes the same fill opacity.
 Requires an
 .Ar icon ,
 .Fl c ,
+.Fl T ,
 or
-.Fl T ;
+.Fl g ;
 it does not apply to
 .Fl t .
 .It Fl a Ar text
@@ -320,7 +330,10 @@ bosd -b 2 -g 200 -G orange audio-headphones
 .Ed
 .Pp
 Honors
-.Fl x
+.Fl A ,
+.Fl O ,
+.Fl o ,
+.Fl x ,
 and
 .Fl y .
 .Ar percent
@@ -348,8 +361,11 @@ default
 Each channel has its own overlay and socket.
 .It Fl o
 Skip the black outline normally drawn behind the glyph for
-legibility on any wallpaper.
-Suited to full-color artwork that carries its own contrast.
+legibility on any wallpaper, or around
+.Fl g
+ticks and the overage label.
+Suited to full-color artwork that carries its own contrast, or a
+gauge drawn without a halo.
 Conflicts with
 .Fl O .
 .It Fl O Ar opacity
@@ -370,6 +386,11 @@ On
 or
 .Fl T
 it fades the text outline the same way.
+On
+.Fl g
+it fades the black tick
+.Pq and overage label
+outline the same way.
 A
 .Fl b
 badge on an
@@ -381,8 +402,9 @@ takes the same outline opacity.
 Requires an
 .Ar icon ,
 .Fl c ,
+.Fl T ,
 or
-.Fl T
+.Fl g
 with outline enabled; conflicts with
 .Fl o .
 .It Fl p Ar text
