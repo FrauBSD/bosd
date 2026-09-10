@@ -14,32 +14,54 @@
 
 static XftFont *badge_font, *cap_font;
 static int badge_font_px = -1, cap_font_px = -1;
+static char badge_face[BOSD_FONT_MAX], cap_face[BOSD_FONT_MAX];
+
+/* "face:attrs" or fallback:attrs — face may already carry Fc props. */
+void
+font_pattern(char *out, size_t outlen, const char *face,
+    const char *fallback, const char *attrs)
+{
+	snprintf(out, outlen, "%s:%s",
+	    (face != NULL && face[0] != '\0') ? face : fallback, attrs);
+}
 
 /* Cache the face (XftFontOpenName/fontconfig can take seconds). */
 static XftFont *
-open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
+open_face(int screen, int pixelsize, XftFont **slot, int *slot_px,
+    char *slot_face, const char *face)
 {
-	char pattern[256];
+	char pattern[BOSD_FONT_MAX + 64];
+	char attrs[64];
 	XftFont *font;
+	const char *want = (face != NULL) ? face : "";
 
-	if (*slot != NULL && *slot_px == pixelsize)
+	if (*slot != NULL && *slot_px == pixelsize &&
+	    strcmp(slot_face, want) == 0)
 		return (*slot);
 	if (*slot != NULL) {
 		XftFontClose(dpy, *slot);
 		*slot = NULL;
 		*slot_px = -1;
+		slot_face[0] = '\0';
 	}
 
-	snprintf(pattern, sizeof(pattern),
-	    "DejaVu Sans:pixelsize=%d:antialias=true", pixelsize);
+	snprintf(attrs, sizeof(attrs), "pixelsize=%d:antialias=true",
+	    pixelsize);
+	font_pattern(pattern, sizeof(pattern), want, "DejaVu Sans", attrs);
 	font = XftFontOpenName(dpy, screen, pattern);
+	if (font == NULL && want[0] != '\0') {
+		font_pattern(pattern, sizeof(pattern), NULL, "DejaVu Sans",
+		    attrs);
+		font = XftFontOpenName(dpy, screen, pattern);
+	}
 	if (font == NULL) {
-		snprintf(pattern, sizeof(pattern),
-		    "Sans:pixelsize=%d:antialias=true", pixelsize);
+		font_pattern(pattern, sizeof(pattern), NULL, "Sans", attrs);
 		font = XftFontOpenName(dpy, screen, pattern);
 	}
 	*slot = font;
 	*slot_px = (font != NULL) ? pixelsize : -1;
+	if (font != NULL)
+		strlcpy(slot_face, want, BOSD_FONT_MAX);
 	return (font);
 }
 
@@ -271,7 +293,7 @@ icon_ink_bounds(const struct icon *ic, int *left, int *top, int *right,
  */
 void
 draw_badge(const struct icon *ic, const char *text, const char *color,
-    double fill_alpha, double outline_alpha)
+    double fill_alpha, double outline_alpha, const char *face)
 {
 	XftFont *font;
 	XGlyphInfo ext;
@@ -295,7 +317,8 @@ draw_badge(const struct icon *ic, const char *text, const char *color,
 		target_h = 109;
 	pixelsize = target_h;
 
-	font = open_face(screen, pixelsize, &badge_font, &badge_font_px);
+	font = open_face(screen, pixelsize, &badge_font, &badge_font_px,
+	    badge_face, face);
 	if (font == NULL)
 		return;
 
@@ -354,14 +377,16 @@ caption_gap(void)
 }
 
 void
-caption_measure(const char *text, int px, int *w, int *h)
+caption_measure(const char *text, int px, int *w, int *h,
+    const char *face)
 {
 	XftFont *font;
 	XGlyphInfo ext;
 
 	*w = 0;
 	*h = 0;
-	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px);
+	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px,
+	    cap_face, face);
 	if (font == NULL)
 		return;
 	XftTextExtentsUtf8(dpy, font, (FcChar8 *)text, (int)strlen(text),
@@ -372,7 +397,8 @@ caption_measure(const char *text, int px, int *w, int *h)
 
 /* Centered caption; anchor_y is the artwork edge it hangs off. */
 void
-draw_caption(const char *text, int px, int anchor_y, int below)
+draw_caption(const char *text, int px, int anchor_y, int below,
+    const char *face)
 {
 	XftFont *font;
 	XGlyphInfo ext;
@@ -381,7 +407,8 @@ draw_caption(const char *text, int px, int anchor_y, int below)
 	if (text == NULL || text[0] == '\0')
 		return;
 	tlen = (int)strlen(text);
-	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px);
+	font = open_face(DefaultScreen(dpy), px, &cap_font, &cap_font_px,
+	    cap_face, face);
 	if (font == NULL)
 		return;
 
@@ -411,10 +438,12 @@ badge_cleanup(void)
 		XftFontClose(dpy, badge_font);
 		badge_font = NULL;
 		badge_font_px = -1;
+		badge_face[0] = '\0';
 	}
 	if (dpy != NULL && cap_font != NULL) {
 		XftFontClose(dpy, cap_font);
 		cap_font = NULL;
 		cap_font_px = -1;
+		cap_face[0] = '\0';
 	}
 }

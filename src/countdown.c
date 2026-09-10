@@ -84,17 +84,20 @@ ref_digit_extents(XGlyphInfo *ref)
  */
 static XftFont *
 open_fit_font(int screen, int w, int h, int *pointsize,
-    const char *fit_text)
+    const char *fit_text, const char *face)
 {
-	char pattern[128];
+	char pattern[BOSD_FONT_MAX + 64];
+	char attrs[96];
 	XftFont *f;
 	XGlyphInfo e;
 	int ps = *pointsize, s, tw;
 
 	while (ps >= 16) {
 		s = stroke_for(ps);
-		snprintf(pattern, sizeof(pattern),
-		    "DejaVu Sans:bold:size=%d:antialias=true:tabular=1", ps);
+		snprintf(attrs, sizeof(attrs),
+		    "bold:size=%d:antialias=true:tabular=1", ps);
+		font_pattern(pattern, sizeof(pattern), face, "DejaVu Sans",
+		    attrs);
 		f = XftFontOpenName(dpy, screen, pattern);
 		if (f == NULL)
 			break;
@@ -113,8 +116,8 @@ open_fit_font(int screen, int w, int h, int *pointsize,
 		XftFontClose(dpy, f);
 		ps -= 16;
 	}
-	snprintf(pattern, sizeof(pattern),
-	    "Sans:bold:size=%d:antialias=true", ps);
+	snprintf(attrs, sizeof(attrs), "bold:size=%d:antialias=true", ps);
+	font_pattern(pattern, sizeof(pattern), face, "Sans", attrs);
 	f = XftFontOpenName(dpy, screen, pattern);
 	if (f != NULL)
 		*pointsize = ps;
@@ -177,7 +180,7 @@ countdown_begin(const struct show_req *req)
 	if (req->scale <= 1.0 && pointsize > 612)
 		pointsize = 612;
 	font = open_fit_font(screen, scr_w, scr_h, &pointsize,
-	    req->text ? text_buf : NULL);
+	    req->text ? text_buf : NULL, req->font);
 	if (font == NULL)
 		return (-1);
 	stroke = req->outline ? stroke_for(pointsize) : 0;
@@ -189,21 +192,26 @@ countdown_begin(const struct show_req *req)
 		strlcpy(text_color, req->tcolor, sizeof(text_color));
 	strlcpy(badge_color, text_color, sizeof(badge_color));
 	if (req->badge[0] != '\0') {
-		char pattern[128];
+		char pattern[BOSD_FONT_MAX + 64];
+		char attrs[64];
 		int bps = pointsize * 26 / 100;
 
-		snprintf(pattern, sizeof(pattern),
-		    "DejaVu Sans:size=%d:antialias=true",
+		snprintf(attrs, sizeof(attrs), "size=%d:antialias=true",
 		    bps < 16 ? 16 : bps);
+		font_pattern(pattern, sizeof(pattern), req->font,
+		    "DejaVu Sans", attrs);
 		bfont = XftFontOpenName(dpy, screen, pattern);
 	}
 	if (req->prefix[0] != '\0' || req->append[0] != '\0') {
-		char pattern[128];
+		char pattern[BOSD_FONT_MAX + 64];
+		char attrs[64];
 		int cps = pointsize * 12 / 100;
 
-		snprintf(pattern, sizeof(pattern),
-		    "DejaVu Sans:bold:size=%d:antialias=true",
+		snprintf(attrs, sizeof(attrs),
+		    "bold:size=%d:antialias=true",
 		    cps < 20 ? 20 : cps);
+		font_pattern(pattern, sizeof(pattern), req->font,
+		    "DejaVu Sans", attrs);
 		cfont = XftFontOpenName(dpy, screen, pattern);
 		cstroke = stroke > 0 ?
 		    (stroke / 4 < 2 ? 2 : stroke / 4) : 0;

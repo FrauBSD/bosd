@@ -17,15 +17,16 @@ usage(void)
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
 	    "       bosd [-Dhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
-	    "            [-b badge] [-F color] [-G color] [-g percent] "
-	    "[-O opacity] \\\n"
-	    "            [-P percent] [-p text] [-s scale] [-x offset] "
-	    "[-y offset] \\\n"
+	    "            [-b badge] [-F color] [-f font] [-G color] "
+	    "[-g percent] \\\n"
+	    "            [-O opacity] [-P percent] [-p text] [-s scale] "
+	    "[-x offset] \\\n"
+	    "            [-y offset] \\\n"
 	    "            { icon | -c countdown | -T text } [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
-	    "[-G color] \\\n"
-	    "            [-g percent] [-P percent] [-x offset] "
-	    "[-y offset] \\\n"
+	    "[-f font] \\\n"
+	    "            [-G color] [-g percent] [-P percent] "
+	    "[-x offset] [-y offset] \\\n"
 	    "            -t text [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
 	    "[-P percent] \\\n"
@@ -80,7 +81,7 @@ main(int argc, char **argv)
 	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
 	while ((ch = getopt(argc, argv,
-	    "A:B:CDF:G:O:P:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
+	    "A:B:CDF:G:O:P:Ta:b:c:df:g:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'A': {
 			char *ep;
@@ -155,6 +156,16 @@ main(int argc, char **argv)
 				usage();
 			}
 			strlcpy(req.tcolor, optarg, sizeof(req.tcolor));
+			break;
+		case 'f':
+			if (optarg[0] == '\0' ||
+			    strlen(optarg) >= sizeof(req.font)) {
+				fprintf(stderr, "bosd: -f font must be "
+				    "1 to %zu characters\n",
+				    sizeof(req.font) - 1);
+				usage();
+			}
+			strlcpy(req.font, optarg, sizeof(req.font));
 			break;
 		case 'G':
 			if (strlen(optarg) >= sizeof(req.color)) {
@@ -280,7 +291,8 @@ main(int argc, char **argv)
 		}
 		if (Dflag || argc != 0 || count != 0 || tflag || Tflag ||
 		    req.gauge >= 0 || req.badge[0] != '\0' ||
-		    req.tcolor[0] != '\0' || req.prefix[0] != '\0' ||
+		    req.tcolor[0] != '\0' || req.font[0] != '\0' ||
+		    req.prefix[0] != '\0' ||
 		    req.append[0] != '\0' || req.scale != 1.0 ||
 		    req.alpha >= 0.0 ||
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
@@ -305,17 +317,25 @@ main(int argc, char **argv)
 		    "bosd: -F colors -c/-t/-T text or a -b badge\n");
 		usage();
 	}
+	if (req.font[0] != '\0' && !tflag && !Tflag && count == 0 &&
+	    req.badge[0] == '\0') {
+		fprintf(stderr,
+		    "bosd: -f sets the face for -c/-t/-T text or a "
+		    "-b badge\n");
+		usage();
+	}
 
 	/* Gauge alone: no icon operand, no -c, no -T, no -t. */
 	if (req.gauge >= 0 && count == 0 && !tflag && !Tflag &&
 	    argc == 0) {
 		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
-		    req.append[0] != '\0' || req.scale != 1.0 ||
+		    req.append[0] != '\0' || req.font[0] != '\0' ||
+		    req.scale != 1.0 ||
 		    req.alpha >= 0.0 ||
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline) {
 			fprintf(stderr,
-			    "bosd: -A, -O, -b, -o, -s, -a, -p adorn "
+			    "bosd: -A, -O, -b, -f, -o, -s, -a, -p adorn "
 			    "the artwork, not the bar\n");
 			usage();
 		}

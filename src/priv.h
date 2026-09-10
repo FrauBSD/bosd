@@ -60,12 +60,16 @@ void	 draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
 		    double fill_alpha, double outline_alpha);
 void	 draw_badge(const struct icon *, const char *text,
 		    const char *color, double fill_alpha,
-		    double outline_alpha);
+		    double outline_alpha, const char *face);
 int	 caption_px(const struct icon *);
 int	 caption_gap(void);
-void	 caption_measure(const char *text, int px, int *w, int *h);
-void	 draw_caption(const char *text, int px, int anchor_y, int below);
+void	 caption_measure(const char *text, int px, int *w, int *h,
+		    const char *face);
+void	 draw_caption(const char *text, int px, int anchor_y, int below,
+		    const char *face);
 void	 badge_cleanup(void);
+void	 font_pattern(char *out, size_t outlen, const char *face,
+		    const char *fallback, const char *attrs);
 
 /* png.c */
 struct icon	*icon_lookup(const char *spec, double scale, double alpha,

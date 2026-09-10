@@ -2,7 +2,7 @@
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
  * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE ALPHA OALPHA
- * OUTL CNT TCOLOR PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until
+ * OUTL CNT TCOLOR FONT PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until
  * replaced or cleared), XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, ALPHA < 0 leaves PNG alpha alone and otherwise multiplies the
@@ -11,8 +11,10 @@
  * OALPHA multiplies the outline halo's alpha (0..1, default 1),
  * OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
  * (SPEC then a placeholder), -1 large text and -2 small text (SPEC
- * then the text, escapes still encoded), TCOLOR the small-text
- * color ("-" for the default green), PFX/APX captions above/below
+ * then the text, escapes still encoded), TCOLOR the text/badge fill
+ * color ("-" for the role default), FONT a fontconfig family
+ * ("-" for the built-in default; whitespace escaped in flight),
+ * PFX/APX captions above/below
  * ("-" when absent, whitespace escaped in flight), SPEC otherwise
  * an absolute path or a bare name resolved against BOSD_PATH / the
  * compiled share directory (".png" appended when missing).  A bare
@@ -140,6 +142,7 @@ send_show_to(const char *sock, const struct show_req *req)
 {
 	char msg[BOSD_MSG_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
+	char font[BOSD_FONT_MAX * 4];
 
 	if (req->gauge >= 0) {
 		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s %d",
@@ -155,12 +158,15 @@ send_show_to(const char *sock, const struct show_req *req)
 	}
 	encode_ws(req->prefix, pfx, sizeof(pfx));
 	encode_ws(req->append, apx, sizeof(apx));
+	encode_ws(req->font, font, sizeof(font));
 	snprintf(msg, sizeof(msg),
-	    "%.2f %d %d %.3f %.3f %.3f %d %d %s %s %s %s%s%s",
+	    "%.2f %d %d %.3f %.3f %.3f %d %d %s %s %s %s %s%s%s",
 	    req->hold, req->x_off, req->y_off, req->scale, req->alpha,
 	    req->outline_alpha, req->outline,
 	    req->text ? -1 : req->small ? -2 : req->count,
-	    req->tcolor[0] != '\0' ? req->tcolor : "-", pfx, apx,
+	    req->tcolor[0] != '\0' ? req->tcolor : "-",
+	    req->font[0] != '\0' ? font : "-",
+	    pfx, apx,
 	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
 	return (send_dgram(sock, msg));
@@ -191,6 +197,7 @@ parse_show(const char *buf, struct show_req *req)
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
 	char tcolor[BOSD_COLOR_MAX];
+	char font[BOSD_FONT_MAX * 4];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 	int n, x_off, y_off, outline, count;
 
@@ -224,14 +231,15 @@ parse_show(const char *buf, struct show_req *req)
 	}
 
 	badge[0] = '\0';
+	font[0] = '\0';
 	alpha = BOSD_ALPHA_NATIVE;
 	oalpha = BOSD_OUTLINE_ALPHA_DEF;
-	/* Field widths track BOSD_SPEC/BADGE/COLOR/CAPTION_MAX (x4). */
+	/* Field widths track BOSD_SPEC/BADGE/COLOR/FONT/CAPTION_MAX (x4). */
 	n = sscanf(buf,
-	    "%lf %d %d %lf %lf %lf %d %d %31s %255s %255s %1023s %31s",
+	    "%lf %d %d %lf %lf %lf %d %d %31s %511s %255s %255s %1023s %31s",
 	    &hold, &x_off, &y_off, &scale, &alpha, &oalpha, &outline,
-	    &count, tcolor, pfx, apx, name, badge);
-	if (n < 12)
+	    &count, tcolor, font, pfx, apx, name, badge);
+	if (n < 13)
 		return (-1);
 	if (hold != -1.0 && hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
@@ -267,6 +275,10 @@ parse_show(const char *buf, struct show_req *req)
 		req->tcolor[0] = '\0';
 	else
 		strlcpy(req->tcolor, tcolor, sizeof(req->tcolor));
+	if (strcmp(font, "-") == 0)
+		req->font[0] = '\0';
+	else
+		decode_escapes(font, req->font, sizeof(req->font));
 	strlcpy(req->spec, name, sizeof(req->spec));
 	/* Display text: decode escapes on arrival; "-" means absent. */
 	decode_escapes(badge, req->badge, sizeof(req->badge));

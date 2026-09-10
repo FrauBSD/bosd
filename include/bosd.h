@@ -14,12 +14,13 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"5.0"
+#define BOSD_VERSION	"5.1"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
 #define BOSD_CAPTION_MAX 64
 #define BOSD_COLOR_MAX	32
+#define BOSD_FONT_MAX	128
 #define BOSD_INSTANCE_MAX 64
 
 #define BOSD_GAUGE_DEF	"#2AC12A"
@@ -61,6 +62,7 @@ struct bosd_req {
 	int	 gauge_prev;	/* >=0: prior percent watermark; -1 off */
 	double	 alpha;		/* <0 native PNG; else multiply PNG alpha */
 	double	 outline_alpha;	/* multiplies outline alpha; 1 = opaque */
+	char	 font[BOSD_FONT_MAX];	/* -f fontconfig family; empty = default */
 };
 
 /* Fill defaults: hold 2s, scale 1, native PNG alpha, outline on and

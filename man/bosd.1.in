@@ -22,6 +22,7 @@
 .Op Fl B Ar seconds
 .Op Fl b Ar badge
 .Op Fl F Ar color
+.Op Fl f Ar font
 .Op Fl G Ar color
 .Op Fl g Ar percent
 .Op Fl O Ar opacity
@@ -37,6 +38,7 @@
 .Op Fl n Ar instance
 .Op Fl B Ar seconds
 .Op Fl F Ar color
+.Op Fl f Ar font
 .Op Fl G Ar color
 .Op Fl g Ar percent
 .Op Fl P Ar percent
@@ -191,7 +193,7 @@ whatever it displays
 without a daemon the
 invoking process draws it and returns when done.
 Honors
-.Fl A , b , F , o , O , s , x ,
+.Fl A , b , F , f , o , O , s , x ,
 and
 .Fl y :
 the badge sits at the digits' upper right and
@@ -238,6 +240,28 @@ when the badge adorns an
 .Fl c ,
 or
 .Fl T .
+.It Fl f Ar font
+Select the typeface for text shows and badges via a fontconfig
+family
+.Pq or richer pattern fragment, e.g. Li DejaVu\ Sans .
+.Nm
+still chooses size and weight for each role
+.Pq bold tabular for Fl c / Fl T ,
+regular for
+.Fl b
+and icon captions, 24px for
+.Fl t .
+Without
+.Fl f
+the built-in defaults remain
+.Pq DejaVu\ Sans for large text and badges, misc-fixed for Fl t .
+Applies to
+.Fl c ,
+.Fl t ,
+.Fl T ,
+and
+.Fl b
+.Pq and to Fl a / Fl p captions on an icon when set .
 .It Fl G Ar color
 Fill the gauge bar's ticks with
 .Ar color ,
@@ -383,19 +407,24 @@ draws the checkmark
 Literal whitespace is not permitted; embed it as
 .Ql \ex20 .
 Honors
-.Fl A , b , F , o , O , s , x ,
+.Fl A , b , F , f , o , O , s , x ,
 and
 .Fl y .
 .It Fl t Ar text
 Draw
 .Ar text
-as small caption lines: 24-pixel fixed type, black-outlined,
+as small caption lines: 24-pixel type, black-outlined,
 centered near the panel bottom with the first line's top fixed
 205 pixels up, filled with the
 .Fl F
 color
 .Pq default green ;
 the look and place of a screenshot's filename caption.
+Without
+.Fl f
+the face is misc-fixed; with
+.Fl f
+an Xft family at the same size.
 Lines split on newline
 .Pq escape Ql \ex0a ,
 center individually, and grow downward.
@@ -407,11 +436,9 @@ Escapes decode as with
 literal whitespace is not permitted
 .Pq embed it as Ql \ex20 .
 Honors
-.Fl x
+.Fl F , f , x ,
 and
 .Fl y .
-.It Fl v
-Print version information and exit.
 .It Fl x Ar offset
 Shift the artwork horizontally by
 .Ar offset

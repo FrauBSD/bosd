@@ -252,13 +252,15 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	/* Captions reserve a line above/below and may widen the window. */
 	cap_w = 0;
 	if (req->prefix[0] != '\0') {
-		caption_measure(req->prefix, caption_px(ic), &cw, &ch);
+		caption_measure(req->prefix, caption_px(ic), &cw, &ch,
+		    req->font);
 		pad_top += ch + caption_gap();
 		if (cw > cap_w)
 			cap_w = cw;
 	}
 	if (req->append[0] != '\0') {
-		caption_measure(req->append, caption_px(ic), &cw, &ch);
+		caption_measure(req->append, caption_px(ic), &cw, &ch,
+		    req->font);
 		pad_bot += ch + caption_gap();
 		if (cw > cap_w)
 			cap_w = cw;
@@ -402,12 +404,14 @@ paint_icon(const struct icon *ic, const struct show_req *req)
 	XClearWindow(dpy, win);
 	paint_rgba(ic->rgba, ic->w, ic->h);
 	draw_badge(ic, req->badge, req->tcolor,
-	    req->alpha >= 0.0 ? req->alpha : 1.0, req->outline_alpha);
+	    req->alpha >= 0.0 ? req->alpha : 1.0, req->outline_alpha,
+	    req->font);
 	if (req->prefix[0] != '\0')
-		draw_caption(req->prefix, caption_px(ic), icon_oy, 0);
+		draw_caption(req->prefix, caption_px(ic), icon_oy, 0,
+		    req->font);
 	if (req->append[0] != '\0')
 		draw_caption(req->append, caption_px(ic),
-		    icon_oy + ic->h, 1);
+		    icon_oy + ic->h, 1, req->font);
 	XSync(dpy, False);
 }
 
