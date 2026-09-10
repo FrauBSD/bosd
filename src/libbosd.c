@@ -21,6 +21,7 @@ bosd_req_init(struct bosd_req *req)
 	req->scale = 1.0;
 	req->outline = 1;
 	req->gauge = -1;
+	req->gauge_prev = -1;
 	req->gauge_hold = BOSD_GAUGE_HOLD_DEF;
 }
 

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"4.0"
+#define BOSD_VERSION	"4.1"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
@@ -54,9 +54,11 @@ struct bosd_req {
 	char	 badge[BOSD_BADGE_MAX];
 	char	 prefix[BOSD_CAPTION_MAX];
 	char	 append[BOSD_CAPTION_MAX];
+	int	 gauge_prev;	/* >=0: prior percent watermark; -1 off */
 };
 
-/* Fill defaults: hold 2s, scale 1, outline on, gauge -1, gauge_hold 3s. */
+/* Fill defaults: hold 2s, scale 1, outline on, gauge -1,
+ * gauge_prev -1, gauge_hold 3s. */
 void		 bosd_req_init(struct bosd_req *);
 
 /* Channel name for the CLI's global instance (bosd -n); default "default". */

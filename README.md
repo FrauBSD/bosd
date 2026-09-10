@@ -73,11 +73,18 @@ bosd -D audio-speakers 1                # render directly, skip the daemon
 bosd -p 'Shutdown in' -b s -c 10        # caption over a 10 s countdown
 bosd -n airplane -a 'airplane mode off' airplane-off  # caption below
 bosd -n volume -g 45                    # gauge bar, 45%, default green
+bosd -n volume -g 90 -P 95              # 90% now; dim shorts above 95%
 bosd -n volume -g 115 -G '#CC2222'      # red bar, "115%" past its edge
 bosd -g 45 -G red -B 3 audio-headphones # glyph + bar, each its own hold
 bosd /path/to/glyph.png                 # one-shot, absolute path
 ```
 
+With `-P`, a warm daemon latches the first previous percent when the
+bar appears and keeps that watermark until the bar hides, so volume
+or brightness key-chords show where the session started. Short ticks
+at or above the watermark are a 50% dimmer shade of `-G`; the return
+zone between current and previous stays full color. Tall ticks are
+never dimmed.
 Bare names resolve through `BOSD_PATH`, then the compiled share
 directory (`share/bosd`). Consumers ship their own glyphs; `bosd`
 ships none.

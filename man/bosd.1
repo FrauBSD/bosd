@@ -1,7 +1,7 @@
 .\"
 .\" SPDX-License-Identifier: BSD-2-Clause
 .\"
-.\" Copyright (c) 2026 Devin Teske
+.\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
 .Dd September 8, 2026
 .Dt BOSD 1
@@ -22,6 +22,7 @@
 .Op Fl b Ar badge
 .Op Fl G Ar color
 .Op Fl g Ar percent
+.Op Fl P Ar percent
 .Op Fl p Ar text
 .Op Fl s Ar scale
 .Op Fl x Ar offset
@@ -35,6 +36,7 @@
 .Op Fl F Ar color
 .Op Fl G Ar color
 .Op Fl g Ar percent
+.Op Fl P Ar percent
 .Op Fl x Ar offset
 .Op Fl y Ar offset
 .Fl t Ar text
@@ -44,9 +46,10 @@
 .Op Fl n Ar instance
 .Op Fl B Ar seconds
 .Op Fl G Ar color
+.Fl g Ar percent
+.Op Fl P Ar percent
 .Op Fl x Ar offset
 .Op Fl y Ar offset
-.Fl g Ar percent
 .Sh DESCRIPTION
 .Nm
 is an on-screen display engine: it flashes transient,
@@ -92,6 +95,15 @@ Hold the gauge bar for
 .Pq default 3.0, clamped to 0.01-30 ,
 independent of the hold on the glyph, digits, or text.
 A value of \-1 holds the bar until it is replaced or cleared.
+On a warm daemon the first
+.Fl B
+of a bar session is latched like
+.Fl P :
+later paints keep that hold
+.Pq so omitting
+.Fl B
+cannot turn an indefinite hold back into the default 3 s
+and each paint still refreshes a finite deadline from now.
 Requires
 .Fl g .
 .It Fl b Ar badge
@@ -174,6 +186,13 @@ itself with no library dependency
 .Pc .
 Above 100% the fill stays full and the percentage is written just
 past the bar's right edge in the same color.
+With
+.Fl P
+on a warm daemon, short ticks at or above the latched previous
+percent use a 50% dimmer shade of the fill; short ticks between
+the current fill and that watermark stay full color
+.Pq the return zone .
+Tall ticks are never dimmed.
 Alone it shows only the bar; alongside an
 .Ar icon ,
 .Fl c ,
@@ -189,6 +208,20 @@ Honors
 .Fl x
 and
 .Fl y .
+.Ar percent
+is 0 to 9999.
+.It Fl P Ar percent
+Previous gauge percent for the watermark under
+.Fl g
+.Pq 0 to 9999, or \-1 to omit .
+When the bar is not yet up, the daemon latches the first
+.Fl P
+and ignores later ones until the bar hides or is cleared.
+Without a daemon,
+.Fl P
+still dims that one-shot paint.
+Requires
+.Fl g .
 .It Fl h
 Print usage and exit.
 .It Fl n Ar instance

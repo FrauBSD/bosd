@@ -34,6 +34,8 @@ static struct icon *m_icon;
 /* Gauge slot. */
 static int b_active;
 static double b_deadline;
+static int b_held_prev = -1;	/* latched -P until the bar hides */
+static double b_held_hold = BOSD_GAUGE_HOLD_DEF;	/* latched -B */
 
 void
 cleanup(int sig __unused)
@@ -195,6 +197,8 @@ drain_socket(int sockfd)
 			main_stop();
 			bar_hide();
 			b_active = 0;
+			b_held_prev = -1;
+			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 			have_main = 0;
 			have_bar = 0;
 			continue;
@@ -208,9 +212,28 @@ drain_socket(int sockfd)
 		}
 	}
 	if (have_bar) {
+		int was = b_active;
+
+		/*
+		 * First paint of a session latches -P and -B; later paints
+		 * keep them so a follow-up without -B cannot turn an
+		 * indefinite hold back into the 3s default (and -P keeps
+		 * the watermark).  Deadline still refreshes each paint
+		 * from the latched hold (now+3s, or never for -1).
+		 */
+		if (!was) {
+			b_held_prev = breq.gauge_prev;
+			b_held_hold = breq.gauge_hold;
+		}
+		breq.gauge_prev = b_held_prev;
+		breq.gauge_hold = b_held_hold;
+		breq.hold = b_held_hold;
 		if (bar_show(&breq) == 0) {
 			b_active = 1;
-			b_deadline = expiry(breq.hold);
+			b_deadline = expiry(b_held_hold);
+		} else if (!was) {
+			b_held_prev = -1;
+			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 		}
 	}
 	if (have_main)
@@ -270,9 +293,12 @@ run_daemon(void)
 		pfd.events = POLLIN;
 		if (poll(&pfd, 1, next_timeout()) < 0 && errno != EINTR)
 			break;
-		if (pfd.revents & POLLIN)
-			drain_socket(sock);
 
+		/*
+		 * Expire before drain so a datagram that arrives on the
+		 * same wake as the deadline starts a new bar session
+		 * (fresh -B/-P latch) instead of extending the old one.
+		 */
 		now = now_monotonic();
 		if (m_kind != M_NONE && m_deadline >= 0.0 &&
 		    now >= m_deadline)
@@ -280,7 +306,13 @@ run_daemon(void)
 		if (b_active && b_deadline >= 0.0 && now >= b_deadline) {
 			bar_hide();
 			b_active = 0;
+			b_held_prev = -1;
+			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 		}
+
+		if (pfd.revents & POLLIN)
+			drain_socket(sock);
+
 		service_x();
 	}
 

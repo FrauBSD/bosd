@@ -13,7 +13,10 @@
  * an absolute path or a bare name resolved against BOSD_PATH / the
  * compiled share directory (".png" appended when missing).  A bare
  * "CLEAR" hides the active render(s).  A gauge travels separately
- * as "BAR HOLD XOFF YOFF PCT COLOR" and coexists with the artwork.
+ * as "BAR HOLD XOFF YOFF PCT COLOR [PREV]" and coexists with the
+ * artwork.  PREV is an optional prior-percent watermark (-1 or
+ * omitted disables); the daemon latches the first PREV when the bar
+ * appears and ignores later ones until the bar hides.
  */
 #include <signal.h>
 #include <stdio.h>
@@ -135,9 +138,10 @@ send_show_to(const char *sock, const struct show_req *req)
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 
 	if (req->gauge >= 0) {
-		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s",
+		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s %d",
 		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
-		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF);
+		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
+		    req->gauge_prev);
 		if (send_dgram(sock, msg) != 0)
 			return (-1);
 		/* Gauge alone, or artwork too? */
@@ -188,14 +192,18 @@ parse_show(const char *buf, struct show_req *req)
 		memset(req, 0, sizeof(*req));
 		req->clear = 1;
 		req->gauge = -1;
+		req->gauge_prev = -1;
 		return (0);
 	}
 	if (strncmp(buf, "BAR ", 4) == 0) {
 		memset(req, 0, sizeof(*req));
-		n = sscanf(buf + 4, "%lf %d %d %d %31s", &hold, &x_off,
-		    &y_off, &req->gauge, req->color);
+		req->gauge_prev = -1;
+		n = sscanf(buf + 4, "%lf %d %d %d %31s %d", &hold, &x_off,
+		    &y_off, &req->gauge, req->color, &req->gauge_prev);
 		if (n < 5 || req->gauge < 0)
 			return (-1);
+		if (n < 6)
+			req->gauge_prev = -1;
 		if (hold != -1.0 && hold <= 0.0)
 			hold = BOSD_GAUGE_HOLD_DEF;
 		req->hold = hold;
@@ -226,6 +234,7 @@ parse_show(const char *buf, struct show_req *req)
 	req->small = count == -2;
 	req->clear = 0;
 	req->gauge = -1;
+	req->gauge_prev = -1;
 	req->x_off = x_off;
 	req->y_off = y_off;
 	if (strcmp(tcolor, "-") == 0)

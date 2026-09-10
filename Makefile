@@ -43,7 +43,7 @@ libbosd.so: ${SHLIB}
 
 ${PROG}: ${PROGOBJS} ${SHLIB} libbosd.so
 	${CC} ${LDFLAGS} -o ${PROG} ${PROGOBJS} -L. -lbosd \
-		-Wl,-rpath,${LIBDIR} ${LDLIBS}
+		-Wl,-rpath,\$$ORIGIN:\$$ORIGIN/../lib:${LIBDIR} ${LDLIBS}
 
 ${LIBOBJS}: CFLAGS+= -fPIC
 

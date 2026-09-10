@@ -17,17 +17,19 @@ usage(void)
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
 	    "       bosd [-Dhov] [-n instance] [-a text] [-B seconds] "
 	    "[-b badge] \\\n"
-	    "            [-G color] [-g percent] [-p text] [-s scale] "
-	    "[-x offset] \\\n"
-	    "            [-y offset] { icon | -c countdown | -T text } "
-	    "[hold_seconds]\n"
+	    "            [-G color] [-g percent] [-P percent] [-p text] "
+	    "[-s scale] \\\n"
+	    "            [-x offset] [-y offset] "
+	    "{ icon | -c countdown | -T text } \\\n"
+	    "            [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
 	    "[-G color] \\\n"
-	    "            [-g percent] [-x offset] [-y offset] -t text "
-	    "[hold_seconds]\n"
+	    "            [-g percent] [-P percent] [-x offset] "
+	    "[-y offset] -t text \\\n"
+	    "            [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
-	    "[-x offset] \\\n"
-	    "            [-y offset] -g percent\n");
+	    "[-g percent] \\\n"
+	    "            [-P percent] [-x offset] [-y offset]\n");
 	exit(1);
 }
 
@@ -65,17 +67,18 @@ main(int argc, char **argv)
 {
 	struct show_req req;
 	int ch, count = 0, Bflag = 0, Cflag = 0, Dflag = 0, Tflag = 0;
-	int dflag = 0, tflag = 0;
+	int dflag = 0, tflag = 0, Pflag = 0;
 
 	memset(&req, 0, sizeof(req));
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.outline = 1;
 	req.gauge = -1;
+	req.gauge_prev = -1;
 	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
 	while ((ch = getopt(argc, argv,
-	    "B:CDF:G:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
+	    "B:CDF:G:P:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'B':
 			Bflag = 1;
@@ -84,6 +87,22 @@ main(int argc, char **argv)
 		case 'C':
 			Cflag = 1;
 			break;
+		case 'P': {
+			char *ep;
+			long v;
+
+			errno = 0;
+			v = strtol(optarg, &ep, 10);
+			if (ep == optarg || *ep != '\0' || errno != 0 ||
+			    v < -1 || v > 9999) {
+				fprintf(stderr, "bosd: -P percent must "
+				    "be -1 or 0 to 9999\n");
+				usage();
+			}
+			Pflag = 1;
+			req.gauge_prev = (int)v;
+			break;
+		}
 		case 'a':
 			if (strlen(optarg) >= sizeof(req.append)) {
 				fprintf(stderr, "bosd: -a text must be "
@@ -234,9 +253,9 @@ main(int argc, char **argv)
 		return (0);
 	}
 
-	if (req.gauge < 0 && (Bflag || req.color[0] != '\0')) {
+	if (req.gauge < 0 && (Bflag || Pflag || req.color[0] != '\0')) {
 		fprintf(stderr,
-		    "bosd: -B and -G describe the bar; they require -g\n");
+		    "bosd: -B, -G, and -P describe the bar; they require -g\n");
 		usage();
 	}
 	if (!tflag && req.tcolor[0] != '\0') {
