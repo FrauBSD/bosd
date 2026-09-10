@@ -40,7 +40,11 @@ COLOR = BSD_RED + (round(255 * OPACITY),)
 STROKE = 24		# weight of every stem, bar, and bowl
 CAP = 220		# cap height
 B_W, S_W, D_W = 160, 136, 168	# letter widths
-B_ADV, S_ADV = 156, 152		# pen advances: S tucks under B's shoulder
+# Pen advances: equal *optical* air (min ink-to-ink over y), not equal
+# bbox gaps.  B's lower bowl sits farther right than S's right stem, so
+# B advances more than B_W+(S_ADV-S_W) would; S_ADV keeps the original
+# S-D tracking and B_ADV opens until the two clearances match (~16).
+B_ADV, S_ADV = 168, 152
 SPAN = B_ADV + S_ADV + D_W	# ink extent of the word
 
 ############################################################ FUNCTIONS
