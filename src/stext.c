@@ -5,18 +5,20 @@
  * with the block sitting above the gauge bar's band so a concurrent
  * -g never overlaps; lines grow downward.
  * Default face is the classic misc-fixed XLFD at scale 1; -f and/or
- * -s != 1 switch to Xft.  Drawn like the gauge bar: a shaped
- * click-through window whose drawn pixels form the bounding mask.
- * Lines split on newline (escape \x0a) and center individually.
+ * -s != 1 switch to Xft.  -A/-O need real alpha so those paints use an
+ * ARGB window and Xft (Fixed when the classic XLFD would have applied);
+ * -o simply skips the outline on either path.
  */
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
 
+#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/Xrender.h>
 #include <X11/extensions/shape.h>
 
 #include "priv.h"
@@ -29,6 +31,8 @@
 
 static Window	 twin;
 static Pixmap	 pix, mask;
+static Colormap	 tcmap;
+static Visual	*tvisual;
 static GC	 pgc, mgc;
 static XFontSet	 fset;
 static XftFont	*xfont;
@@ -37,6 +41,8 @@ static char	 xface[BOSD_FONT_MAX];
 static int	 ascent, lineh, outl, xpx;
 static int	 tmapped;
 static int	 use_xft;
+static int	 t_argb;	/* twin is an ARGB window */
+static int	 tdepth;
 
 static void
 stext_close_fonts(void)
@@ -236,6 +242,152 @@ mask_line_xft(const char *s, int x, int base, Visual *vis, Colormap cm)
 	XDestroyImage(img);
 }
 
+static void
+stext_drop_window(void)
+{
+	if (xdraw != NULL) {
+		XftDrawDestroy(xdraw);
+		xdraw = NULL;
+	}
+	if (pix != 0) {
+		if (twin != 0)
+			XSetWindowBackgroundPixmap(dpy, twin, None);
+		XFreePixmap(dpy, pix);
+		pix = 0;
+	}
+	if (mask != 0) {
+		XFreePixmap(dpy, mask);
+		mask = 0;
+	}
+	if (twin != 0) {
+		XDestroyWindow(dpy, twin);
+		twin = 0;
+	}
+	if (tcmap != None) {
+		XFreeColormap(dpy, tcmap);
+		tcmap = None;
+	}
+	tvisual = NULL;
+	tmapped = 0;
+	t_argb = 0;
+}
+
+/* ARGB click-through window for translucent -t. */
+static Window
+stext_argb_window(int x, int y, int w, int h)
+{
+	XSetWindowAttributes wa;
+	Atom net_wm_state, states[3];
+	Window swin;
+	XRectangle rect;
+	int screen = DefaultScreen(dpy);
+
+	tvisual = find_argb_visual(&tdepth);
+	if (tvisual == NULL)
+		return (0);
+	if (tcmap != None)
+		XFreeColormap(dpy, tcmap);
+	tcmap = XCreateColormap(dpy, RootWindow(dpy, screen), tvisual,
+	    AllocNone);
+	wa.colormap = tcmap;
+	wa.border_pixel = 0;
+	wa.background_pixel = 0;
+	wa.override_redirect = True;
+	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
+	    (unsigned)w, (unsigned)h, 0, tdepth, InputOutput, tvisual,
+	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect,
+	    &wa);
+	if (swin == 0)
+		return (0);
+	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
+	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
+	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
+	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
+	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
+	    PropModeReplace, (unsigned char *)states, 3);
+	XStoreName(dpy, swin, "bosd");
+	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
+	    ShapeSet, Unsorted);
+	rect.x = 0;
+	rect.y = 0;
+	rect.width = (unsigned short)w;
+	rect.height = (unsigned short)h;
+	XShapeCombineRectangles(dpy, swin, ShapeBounding, 0, 0, &rect, 1,
+	    ShapeSet, Unsorted);
+	return (swin);
+}
+
+static int
+stext_show_argb(const struct show_req *req, char **lines, int nl,
+    const char *fill_name, double fill_a, double out_a, int stroke)
+{
+	XRenderPictFormat *fmt;
+	XRenderColor clear;
+	Picture pic;
+	XRectangle rect;
+	int i, lw, lx, base;
+	int x, y, w, h;
+
+	w = scr_w;
+	h = nl * lineh;
+	x = scr_x + req->x_off;
+	y = scr_y + scr_h - (bar_band_height() + STEXT_GAP + h) +
+	    req->y_off;
+
+	if (twin != 0 && !t_argb)
+		stext_drop_window();
+	if (twin == 0 && (twin = stext_argb_window(x, y, w, h)) == 0)
+		return (-1);
+	t_argb = 1;
+	XMoveResizeWindow(dpy, twin, x, y, (unsigned)w, (unsigned)h);
+
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return (-1);
+	if (pix != 0) {
+		XSetWindowBackgroundPixmap(dpy, twin, None);
+		XFreePixmap(dpy, pix);
+	}
+	pix = XCreatePixmap(dpy, twin, (unsigned)w, (unsigned)h, 32);
+	pic = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	clear.red = clear.green = clear.blue = clear.alpha = 0;
+	XRenderFillRectangle(dpy, PictOpSrc, pic, &clear, 0, 0, w, h);
+	XRenderFreePicture(dpy, pic);
+
+	draw_set_target(pix, tvisual, tcmap);
+	for (i = 0; i < nl; i++) {
+		XGlyphInfo e;
+
+		XftTextExtentsUtf8(dpy, xfont, (const FcChar8 *)lines[i],
+		    (int)strlen(lines[i]), &e);
+		lw = (int)e.width;
+		lx = (w - lw) / 2;
+		base = i * lineh + ascent + outl;
+		draw_outlined_utf8(NULL, xfont, lx, base, lines[i], stroke,
+		    fill_name, fill_a, out_a);
+	}
+	draw_set_target(0, NULL, None);
+
+	XSetWindowBackgroundPixmap(dpy, twin, pix);
+	rect.x = 0;
+	rect.y = 0;
+	rect.width = (unsigned short)w;
+	rect.height = (unsigned short)h;
+	XShapeCombineRectangles(dpy, twin, ShapeBounding, 0, 0, &rect, 1,
+	    ShapeSet, Unsorted);
+
+	if (!tmapped) {
+		XMapRaised(dpy, twin);
+		tmapped = 1;
+		XSync(dpy, False);
+	} else
+		XRaiseWindow(dpy, twin);
+	XClearWindow(dpy, twin);
+	XRaiseWindow(dpy, twin);
+	XSync(dpy, False);
+	return (0);
+}
+
 int
 stext_show(const struct show_req *req)
 {
@@ -244,15 +396,43 @@ stext_show(const struct show_req *req)
 	char text[BOSD_SPEC_MAX];
 	char *lines[STEXT_MAXLINES];
 	char *p;
+	const char *fill_name;
 	int screen = DefaultScreen(dpy), depth;
 	int nl = 0, i, lw, lx, base;
 	int x, y, w, h;
+	int need_argb, stroke;
 	unsigned long fill_px, black;
+	double fill_a, out_a;
 	Visual *vis;
 	Colormap cm;
 
+	fill_a = req->alpha >= 0.0 ? req->alpha : 1.0;
+	out_a = req->outline ? req->outline_alpha : 0.0;
+	if (fill_a < BOSD_ALPHA_MIN)
+		fill_a = BOSD_ALPHA_MIN;
+	if (fill_a > BOSD_ALPHA_MAX)
+		fill_a = BOSD_ALPHA_MAX;
+	if (out_a < BOSD_ALPHA_MIN)
+		out_a = BOSD_ALPHA_MIN;
+	if (out_a > BOSD_ALPHA_MAX)
+		out_a = BOSD_ALPHA_MAX;
+	/*
+	 * Real translucency needs ARGB.  -o alone stays on the shaped
+	 * path (just skip the outline).  -A / -O take the ARGB+Xft path.
+	 */
+	need_argb = (req->alpha >= 0.0 ||
+	    req->outline_alpha != BOSD_OUTLINE_ALPHA_DEF);
+
 	if (stext_metrics(req->font, req->scale) != 0)
 		return (-1);
+	if (need_argb && !use_xft) {
+		/* Classic XLFD has no alpha; paint as Xft Fixed instead. */
+		if (stext_metrics(
+		    req->font[0] != '\0' ? req->font : "Fixed",
+		    req->scale) != 0)
+			return (-1);
+	}
+
 	decode_escapes(req->spec, text, sizeof(text));
 	for (p = text; nl < STEXT_MAXLINES && *p != '\0';) {
 		lines[nl++] = p;
@@ -264,6 +444,13 @@ stext_show(const struct show_req *req)
 	if (nl == 0)
 		return (-1);
 
+	fill_name = req->tcolor[0] != '\0' ? req->tcolor : BOSD_STEXT_DEF;
+	stroke = req->outline ? outl : 0;
+
+	if (need_argb)
+		return (stext_show_argb(req, lines, nl, fill_name, fill_a,
+		    out_a, stroke));
+
 	w = scr_w;
 	h = nl * lineh;
 	x = scr_x + req->x_off;
@@ -274,8 +461,11 @@ stext_show(const struct show_req *req)
 	 */
 	y = scr_y + scr_h - (bar_band_height() + STEXT_GAP + h) +
 	    req->y_off;
+	if (twin != 0 && t_argb)
+		stext_drop_window();
 	if (twin == 0 && (twin = shaped_window(x, y, w, h)) == 0)
 		return (-1);
+	t_argb = 0;
 	XMoveResizeWindow(dpy, twin, x, y, (unsigned)w, (unsigned)h);
 
 	depth = DefaultDepth(dpy, screen);
@@ -298,9 +488,7 @@ stext_show(const struct show_req *req)
 	XFillRectangle(dpy, pix, pgc, 0, 0, (unsigned)w, (unsigned)h);
 
 	black = BlackPixel(dpy, screen);
-	if (XAllocNamedColor(dpy, cm,
-	    req->tcolor[0] != '\0' ? req->tcolor : BOSD_STEXT_DEF,
-	    &col, &exact))
+	if (XAllocNamedColor(dpy, cm, fill_name, &col, &exact))
 		fill_px = col.pixel;
 	else
 		fill_px = WhitePixel(dpy, screen);
@@ -312,9 +500,7 @@ stext_show(const struct show_req *req)
 		if (xdraw == NULL)
 			return (-1);
 		if (!XftColorAllocName(dpy, vis, cm, "black", &xblack) ||
-		    !XftColorAllocName(dpy, vis, cm,
-		    req->tcolor[0] != '\0' ? req->tcolor : BOSD_STEXT_DEF,
-		    &xink)) {
+		    !XftColorAllocName(dpy, vis, cm, fill_name, &xink)) {
 			if (xdraw != NULL) {
 				XftDrawDestroy(xdraw);
 				xdraw = NULL;
@@ -330,8 +516,18 @@ stext_show(const struct show_req *req)
 			lw = (int)e.width;
 			lx = (w - lw) / 2;
 			base = i * lineh + ascent + outl;
-			mask_line_xft(lines[i], lx, base, vis, cm);
-			line_pass_xft(xdraw, lines[i], lx, base, &xblack, 1);
+			if (stroke > 0) {
+				mask_line_xft(lines[i], lx, base, vis, cm);
+				line_pass_xft(xdraw, lines[i], lx, base,
+				    &xblack, 1);
+			} else {
+				/* Fill-only mask: reuse white stamp path. */
+				int save = outl;
+
+				outl = 0;
+				mask_line_xft(lines[i], lx, base, vis, cm);
+				outl = save;
+			}
 			line_pass_xft(xdraw, lines[i], lx, base, &xink, 0);
 		}
 		XftColorFree(dpy, vis, cm, &xink);
@@ -342,9 +538,11 @@ stext_show(const struct show_req *req)
 			    (int)strlen(lines[i]));
 			lx = (w - lw) / 2;
 			base = i * lineh + ascent + outl;
-			XSetForeground(dpy, pgc, black);
 			XSetForeground(dpy, mgc, 1);
-			line_pass_core(lines[i], lx, base, 1);
+			if (stroke > 0) {
+				XSetForeground(dpy, pgc, black);
+				line_pass_core(lines[i], lx, base, 1);
+			}
 			XSetForeground(dpy, pgc, fill_px);
 			line_pass_core(lines[i], lx, base, 0);
 		}
@@ -386,19 +584,7 @@ stext_cleanup(void)
 		XFreeGC(dpy, mgc);
 		mgc = None;
 	}
-	if (pix != 0) {
-		XFreePixmap(dpy, pix);
-		pix = 0;
-	}
-	if (mask != 0) {
-		XFreePixmap(dpy, mask);
-		mask = 0;
-	}
-	if (twin != 0) {
-		XDestroyWindow(dpy, twin);
-		twin = 0;
-	}
-	tmapped = 0;
+	stext_drop_window();
 }
 
 /* One-shot fallback: no daemon on the channel, draw it ourselves. */

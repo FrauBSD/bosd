@@ -58,6 +58,7 @@ void	 x11_cleanup(void);
 void	 draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
 		    const char *text, int stroke, const char *fill_color,
 		    double fill_alpha, double outline_alpha);
+void	 draw_set_target(Drawable d, Visual *v, Colormap c); /* 0 = overlay */
 void	 draw_badge(const struct icon *, const char *text,
 		    const char *color, double fill_alpha,
 		    double outline_alpha, const char *face);

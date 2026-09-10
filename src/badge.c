@@ -16,6 +16,43 @@ static XftFont *badge_font, *cap_font;
 static int badge_font_px = -1, cap_font_px = -1;
 static char badge_face[BOSD_FONT_MAX], cap_face[BOSD_FONT_MAX];
 
+/* Optional paint target for draw_outlined_utf8 (0 = main overlay). */
+static Drawable draw_dst;
+static Visual *draw_vis;
+static Colormap draw_cm;
+
+void
+draw_set_target(Drawable d, Visual *v, Colormap c)
+{
+	draw_dst = d;
+	draw_vis = v;
+	draw_cm = c;
+}
+
+static Drawable
+paint_drawable(void)
+{
+	if (draw_dst != 0)
+		return (draw_dst);
+	return (win);
+}
+
+static Visual *
+paint_visual(void)
+{
+	if (draw_dst != 0 && draw_vis != NULL)
+		return (draw_vis);
+	return (visual);
+}
+
+static Colormap
+paint_cmap(void)
+{
+	if (draw_dst != 0 && draw_cm != None)
+		return (draw_cm);
+	return (cmap);
+}
+
 /* "face:attrs" or fallback:attrs — face may already carry Fc props. */
 void
 font_pattern(char *out, size_t outlen, const char *face,
@@ -71,15 +108,21 @@ blit_layer(Pixmap pix, int iw, int ih, int dx, int dy, double alpha)
 	XRenderPictFormat *fmt;
 	Picture src, dst, mask;
 	XRenderColor mc;
+	Drawable dest = paint_drawable();
+	Visual *vis = paint_visual();
 
-	if (alpha <= 0.0)
+	if (alpha <= 0.0 || dest == 0)
 		return;
 	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
 	if (fmt == NULL)
 		return;
 	src = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
-	fmt = XRenderFindVisualFormat(dpy, visual);
-	dst = XRenderCreatePicture(dpy, win, fmt, 0, NULL);
+	fmt = XRenderFindVisualFormat(dpy, vis);
+	if (fmt == NULL) {
+		XRenderFreePicture(dpy, src);
+		return;
+	}
+	dst = XRenderCreatePicture(dpy, dest, fmt, 0, NULL);
 	mc.red = mc.green = mc.blue = 0xffff;
 	mc.alpha = (unsigned short)(alpha * 65535.0 + 0.5);
 	mask = XRenderCreateSolidFill(dpy, &mc);
@@ -117,21 +160,24 @@ stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
 	XRenderColor clear;
 	Pixmap pix;
 	Picture tp;
+	Drawable parent = paint_drawable();
+	Visual *vis = paint_visual();
+	Colormap cm = paint_cmap();
 	int dx, dy;
 	int fill = (color != NULL);
 
 	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
-	if (fmt == NULL)
+	if (fmt == NULL || parent == 0)
 		return (None);
-	pix = XCreatePixmap(dpy, win, iw, ih, 32);
+	pix = XCreatePixmap(dpy, parent, iw, ih, 32);
 	tp = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
 	clear.red = clear.green = clear.blue = clear.alpha = 0;
 	XRenderFillRectangle(dpy, PictOpSrc, tp, &clear, 0, 0, iw, ih);
 	XRenderFreePicture(dpy, tp);
 
-	td = XftDrawCreate(dpy, pix, visual, cmap);
+	td = XftDrawCreate(dpy, pix, vis, cm);
 	if (td == NULL ||
-	    !XftColorAllocName(dpy, visual, cmap,
+	    !XftColorAllocName(dpy, vis, cm,
 	    fill ? color : "black", &ink)) {
 		if (td != NULL)
 			XftDrawDestroy(td);
@@ -151,7 +197,7 @@ stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
 			}
 		}
 	}
-	XftColorFree(dpy, visual, cmap, &ink);
+	XftColorFree(dpy, vis, cm, &ink);
 	XftDrawDestroy(td);
 	return (pix);
 }
@@ -169,6 +215,9 @@ draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
 	XftColor fg, bg;
 	XftDraw *own = NULL;
 	Pixmap opix = None, fpix = None;
+	Visual *vis = paint_visual();
+	Colormap cm = paint_cmap();
+	Drawable dest = paint_drawable();
 	int len, dx, dy, ox, oy, iw, ih, lx, ly;
 
 	if (text == NULL || text[0] == '\0' || font == NULL)
@@ -178,29 +227,34 @@ draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
 		fill_color = "white";
 	if (fill_alpha >= 1.0 && outline_alpha >= 1.0) {
 		if (xd == NULL) {
-			own = XftDrawCreate(dpy, win, visual, cmap);
+			if (dest == 0)
+				return;
+			own = XftDrawCreate(dpy, dest, vis, cm);
 			xd = own;
 		}
 		if (xd == NULL)
 			return;
-		if (!XftColorAllocName(dpy, visual, cmap, fill_color, &fg) ||
-		    !XftColorAllocName(dpy, visual, cmap, "black", &bg)) {
+		if (!XftColorAllocName(dpy, vis, cm, fill_color, &fg) ||
+		    !XftColorAllocName(dpy, vis, cm, "black", &bg)) {
 			if (own != NULL)
 				XftDrawDestroy(own);
 			return;
 		}
-		for (dx = -stroke; dx <= stroke; dx++) {
-			for (dy = -stroke; dy <= stroke; dy++) {
-				if (dx == 0 && dy == 0)
-					continue;
-				XftDrawStringUtf8(xd, &bg, font, x + dx,
-				    y + dy, (const FcChar8 *)text, len);
+		if (stroke > 0) {
+			for (dx = -stroke; dx <= stroke; dx++) {
+				for (dy = -stroke; dy <= stroke; dy++) {
+					if (dx == 0 && dy == 0)
+						continue;
+					XftDrawStringUtf8(xd, &bg, font,
+					    x + dx, y + dy,
+					    (const FcChar8 *)text, len);
+				}
 			}
 		}
-		XftDrawStringUtf8(xd, &fg, font, x, y, (const FcChar8 *)text,
-		    len);
-		XftColorFree(dpy, visual, cmap, &fg);
-		XftColorFree(dpy, visual, cmap, &bg);
+		XftDrawStringUtf8(xd, &fg, font, x, y,
+		    (const FcChar8 *)text, len);
+		XftColorFree(dpy, vis, cm, &fg);
+		XftColorFree(dpy, vis, cm, &bg);
 		if (own != NULL)
 			XftDrawDestroy(own);
 		return;

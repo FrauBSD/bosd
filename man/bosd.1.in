@@ -34,13 +34,15 @@
 .Bro Ar icon | Fl c Ar countdown | Fl T Ar text Brc
 .Op Ar hold_seconds
 .Nm
-.Op Fl CDhv
+.Op Fl CDhov
 .Op Fl n Ar instance
+.Op Fl A Ar opacity
 .Op Fl B Ar seconds
 .Op Fl F Ar color
 .Op Fl f Ar font
 .Op Fl G Ar color
 .Op Fl g Ar percent
+.Op Fl O Ar opacity
 .Op Fl P Ar percent
 .Op Fl s Ar scale
 .Op Fl x Ar offset
@@ -130,6 +132,11 @@ sets the tick
 .Pq and overage label
 fill opacity the same way
 .Pq default full without Fl A .
+On
+.Fl t ,
+.Fl A
+fades the caption fill the same way
+.Pq default full without Fl A .
 A
 .Fl b
 badge on an
@@ -142,9 +149,8 @@ Requires an
 .Ar icon ,
 .Fl c ,
 .Fl T ,
+.Fl g ,
 or
-.Fl g ;
-it does not apply to
 .Fl t .
 .It Fl a Ar text
 Caption below the artwork: a smaller outlined line under the
@@ -361,11 +367,13 @@ default
 Each channel has its own overlay and socket.
 .It Fl o
 Skip the black outline normally drawn behind the glyph for
-legibility on any wallpaper, or around
+legibility on any wallpaper, around
 .Fl g
-ticks and the overage label.
+ticks and the overage label, or around
+.Fl t
+caption text.
 Suited to full-color artwork that carries its own contrast, or a
-gauge drawn without a halo.
+gauge or caption drawn without a halo.
 Conflicts with
 .Fl O .
 .It Fl O Ar opacity
@@ -391,6 +399,9 @@ On
 it fades the black tick
 .Pq and overage label
 outline the same way.
+On
+.Fl t
+it fades the caption outline the same way.
 A
 .Fl b
 badge on an
@@ -403,8 +414,9 @@ Requires an
 .Ar icon ,
 .Fl c ,
 .Fl T ,
+.Fl g ,
 or
-.Fl g
+.Fl t
 with outline enabled; conflicts with
 .Fl o .
 .It Fl p Ar text
@@ -503,10 +515,9 @@ Escapes decode as with
 literal whitespace is not permitted
 .Pq embed it as Ql \ex20 .
 Honors
-.Fl F , f , s , x ,
+.Fl A , F , f , o , O , s , x ,
 and
 .Fl y .
-.It Fl x Ar offset
 Shift the artwork horizontally by
 .Ar offset
 pixels from panel center: positive right, negative left.

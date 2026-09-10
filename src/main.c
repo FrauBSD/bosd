@@ -23,11 +23,12 @@ usage(void)
 	    "[-x offset] \\\n"
 	    "            [-y offset] { icon | -c countdown | -T text } "
 	    "[hold_seconds]\n"
-	    "       bosd [-CDhv] [-n instance] [-B seconds] [-F color] "
-	    "[-f font] \\\n"
-	    "            [-G color] [-g percent] [-P percent] [-s scale] "
-	    "[-x offset] \\\n"
-	    "            [-y offset] -t text [hold_seconds]\n"
+	    "       bosd [-CDhov] [-n instance] [-A opacity] [-B seconds] "
+	    "[-F color] \\\n"
+	    "            [-f font] [-G color] [-g percent] [-O opacity] "
+	    "[-P percent] \\\n"
+	    "            [-s scale] [-x offset] [-y offset] -t text "
+	    "[hold_seconds]\n"
 	    "       bosd [-CDhov] [-n instance] [-A opacity] [-B seconds] "
 	    "[-G color] \\\n"
 	    "            [-O opacity] [-P percent] [-x offset] [-y offset] "
@@ -379,12 +380,9 @@ main(int argc, char **argv)
 		if ((count > 0 && (tflag || Tflag)) || (tflag && Tflag))
 			usage();
 		if (tflag && (req.badge[0] != '\0' ||
-		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
-		    req.alpha >= 0.0 ||
-		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
-		    !req.outline)) {
+		    req.prefix[0] != '\0' || req.append[0] != '\0')) {
 			fprintf(stderr,
-			    "bosd: -A, -O, -b, -o, -a, -p adorn "
+			    "bosd: -b, -a, -p adorn "
 			    "the large artwork; they do not apply to -t\n");
 			usage();
 		}
