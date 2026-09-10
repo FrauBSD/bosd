@@ -42,6 +42,7 @@
 .Op Fl G Ar color
 .Op Fl g Ar percent
 .Op Fl P Ar percent
+.Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
 .Fl t Ar text
@@ -75,8 +76,8 @@ centered on the monitor marked primary
 when no primary is set, on the laptop's built-in panel
 .Pq eDP/LVDS/DSI ;
 and failing both, on the X screen as a whole.
-Small text centers near the bottom of the same panel, its top
-fixed 205 pixels up.
+Small text centers near the bottom of the same panel, stacked
+above the gauge bar's band so the two never overlap.
 The gauge bar runs on an independent timer, so a gauge and a
 glyph can be up at once: a new gauge replaces the gauge, new
 artwork replaces the artwork, and neither clears the other.
@@ -372,13 +373,22 @@ over a countdown, with
 .Fl b Li s
 marking seconds.
 .It Fl s Ar scale
-Multiply the panel-derived render size by
+Multiply the render size by
 .Ar scale
 .Pq 0.1 to 8.0, default 1.0 .
-The glyph is normally sized from the panel height, independent of
-the PNG's native resolution;
+On an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T
+the size is panel-derived
+.Pq independent of a PNG's native resolution ;
 .Fl s Li 2.0
 renders it twice that size.
+On
+.Fl t
+it multiplies the 24-pixel caption size
+.Pq and outline thickness .
 .It Fl T Ar text
 Draw
 .Ar text
@@ -413,18 +423,23 @@ and
 .It Fl t Ar text
 Draw
 .Ar text
-as small caption lines: 24-pixel type, black-outlined,
-centered near the panel bottom with the first line's top fixed
-205 pixels up, filled with the
+as small caption lines: 24-pixel type
+.Pq times Fl s ,
+black-outlined, centered near the panel bottom and stacked above
+the gauge bar's band
+.Pq so a concurrent Fl g cannot cover it ,
+filled with the
 .Fl F
 color
 .Pq default green ;
 the look and place of a screenshot's filename caption.
 Without
 .Fl f
-the face is misc-fixed; with
-.Fl f
-an Xft family at the same size.
+and at
+.Fl s Li 1
+the face is misc-fixed; otherwise an Xft family
+.Pq Fl f , or Fixed when only scaling
+at the scaled size.
 Lines split on newline
 .Pq escape Ql \ex0a ,
 center individually, and grow downward.
@@ -436,7 +451,7 @@ Escapes decode as with
 literal whitespace is not permitted
 .Pq embed it as Ql \ex20 .
 Honors
-.Fl F , f , x ,
+.Fl F , f , s , x ,
 and
 .Fl y .
 .It Fl x Ar offset

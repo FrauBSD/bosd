@@ -81,6 +81,7 @@ Window	 shaped_window(int x, int y, int w, int h);
 int	 bar_show(const struct show_req *);
 void	 bar_hide(void);
 void	 bar_cleanup(void);
+int	 bar_band_height(void);	/* panel-bottom clearance the bar occupies */
 int	 run_bar(const struct show_req *);
 
 /* stext.c */

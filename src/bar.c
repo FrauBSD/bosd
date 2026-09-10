@@ -65,6 +65,18 @@ bar_metrics(void)
 	return (0);
 }
 
+/*
+ * How far up from the panel bottom the gauge band reaches (BAR_VOFF
+ * plus the tick window).  Used so -t captions sit entirely above it.
+ */
+int
+bar_band_height(void)
+{
+	if (bar_metrics() != 0)
+		return (BAR_VOFF + 56);
+	return (BAR_VOFF + lineh);
+}
+
 /* Borderless click-through window whose shape the caller sets. */
 Window
 shaped_window(int x, int y, int w, int h)

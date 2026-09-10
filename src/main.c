@@ -25,9 +25,9 @@ usage(void)
 	    "            { icon | -c countdown | -T text } [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
 	    "[-f font] \\\n"
-	    "            [-G color] [-g percent] [-P percent] "
-	    "[-x offset] [-y offset] \\\n"
-	    "            -t text [hold_seconds]\n"
+	    "            [-G color] [-g percent] [-P percent] [-s scale] "
+	    "[-x offset] \\\n"
+	    "            [-y offset] -t text [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
 	    "[-P percent] \\\n"
 	    "            [-x offset] [-y offset] -g percent\n");
@@ -351,11 +351,11 @@ main(int argc, char **argv)
 			usage();
 		if (tflag && (req.badge[0] != '\0' ||
 		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
-		    req.scale != 1.0 || req.alpha >= 0.0 ||
+		    req.alpha >= 0.0 ||
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline)) {
 			fprintf(stderr,
-			    "bosd: -A, -O, -b, -o, -s, -a, -p adorn "
+			    "bosd: -A, -O, -b, -o, -a, -p adorn "
 			    "the large artwork; they do not apply to -t\n");
 			usage();
 		}
