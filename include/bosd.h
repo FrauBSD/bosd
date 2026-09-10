@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"4.3"
+#define BOSD_VERSION	"4.4"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
@@ -30,6 +30,9 @@ extern "C" {
 #define BOSD_HOLD_MAX	30.0
 #define BOSD_SCALE_MIN	0.1
 #define BOSD_SCALE_MAX	8.0
+#define BOSD_ALPHA_NATIVE (-1.0)	/* leave PNG alpha alone */
+#define BOSD_ALPHA_MIN	0.0
+#define BOSD_ALPHA_MAX	1.0
 
 /*
  * One display request.  Zero the struct (or call bosd_req_init) then
@@ -55,9 +58,10 @@ struct bosd_req {
 	char	 prefix[BOSD_CAPTION_MAX];
 	char	 append[BOSD_CAPTION_MAX];
 	int	 gauge_prev;	/* >=0: prior percent watermark; -1 off */
+	double	 alpha;		/* <0 native PNG; else multiply PNG alpha */
 };
 
-/* Fill defaults: hold 2s, scale 1, outline on, gauge -1,
+/* Fill defaults: hold 2s, scale 1, native PNG alpha, outline on, gauge -1,
  * gauge_prev -1, gauge_hold 3s. */
 void		 bosd_req_init(struct bosd_req *);
 

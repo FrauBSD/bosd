@@ -25,6 +25,7 @@ struct icon {
 	char		 path[BOSD_SPEC_MAX];
 	unsigned char	*rgba;
 	double		 scale;
+	double		 alpha;
 	int		 outline;
 	int		 w, h;
 };
@@ -60,7 +61,8 @@ void	 draw_caption(const char *text, int px, int anchor_y, int below);
 void	 badge_cleanup(void);
 
 /* png.c */
-struct icon	*icon_lookup(const char *spec, double scale, int outline);
+struct icon	*icon_lookup(const char *spec, double scale, double alpha,
+		    int outline);
 void		 icon_cache_clear(void);
 
 /* bar.c */

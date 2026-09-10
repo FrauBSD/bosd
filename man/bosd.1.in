@@ -17,6 +17,7 @@
 .Nm
 .Op Fl Dhov
 .Op Fl n Ar instance
+.Op Fl A Ar opacity
 .Op Fl a Ar text
 .Op Fl B Ar seconds
 .Op Fl b Ar badge
@@ -80,6 +81,28 @@ rapid key repeats never flash.
 .Pp
 The options are as follows:
 .Bl -tag -width "-n instance"
+.It Fl A Ar opacity
+Multiply the PNG glyph's per-pixel alpha by
+.Ar opacity
+.Pq 0.0 to 1.0 .
+Without
+.Fl A
+the file's baked alpha is left alone
+.Pq e.g. the example BSD glyph at 80%
+and the black outline halo stays fully opaque.
+With
+.Fl A
+the halo is still drawn from the file's native coverage and stays
+fully opaque; only the glyph's alpha is multiplied
+.Pq an 80% pixel with Fl A Li 0.5 becomes 40%;
+.Fl A Li 0
+leaves an outline with an invisible glyph .
+Requires an
+.Ar icon ;
+it does not apply to
+.Fl c , T ,
+or
+.Fl t .
 .It Fl a Ar text
 Caption below the artwork: a smaller outlined line under the
 glyph, digits, or text, e.g.

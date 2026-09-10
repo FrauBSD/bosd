@@ -182,6 +182,43 @@ add_outline(const unsigned char *src, int w, int h, int stroke,
 	return (out);
 }
 
+/*
+ * Multiply every pixel's alpha by factor (0..1); RGB unchanged.
+ * If skip_black, leave pure-black pixels alone (the outline halo).
+ */
+static void
+apply_alpha(unsigned char *rgba, int w, int h, double alpha, int skip_black)
+{
+	size_t n, i;
+	unsigned q;
+
+	if (alpha < 0.0 || alpha >= 1.0)
+		return;
+	n = (size_t)w * (size_t)h;
+	if (alpha <= 0.0) {
+		for (i = 0; i < n; i++) {
+			unsigned char *p = rgba + i * 4;
+
+			if (skip_black && p[0] == 0 && p[1] == 0 && p[2] == 0)
+				continue;
+			p[3] = 0;
+		}
+		return;
+	}
+	q = (unsigned)(alpha * 255.0 + 0.5);
+	if (q > 255)
+		q = 255;
+	for (i = 0; i < n; i++) {
+		unsigned char *p = rgba + i * 4;
+		unsigned a;
+
+		if (skip_black && p[0] == 0 && p[1] == 0 && p[2] == 0)
+			continue;
+		a = p[3];
+		p[3] = (unsigned char)((a * q + 127) / 255);
+	}
+}
+
 /* Transparent margin around the artwork (badge headroom, halo air). */
 static unsigned char *
 pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
@@ -201,8 +238,8 @@ pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
 }
 
 static unsigned char *
-prep_icon(const char *path, double scale, int outline, int *w_out,
-    int *h_out)
+prep_icon(const char *path, double scale, double alpha, int outline,
+    int *w_out, int *h_out)
 {
 	unsigned char *src, *scaled, *padded, *outlined;
 	int sw, sh, dw, dh, px, stroke, margin, ow, oh;
@@ -232,7 +269,16 @@ prep_icon(const char *path, double scale, int outline, int *w_out,
 	free(scaled);
 	if (padded == NULL)
 		return (NULL);
+	/*
+	 * Build the halo from the file's native coverage first so a low
+	 * or zero -A cannot erase the mask (add_outline wants alpha>=32).
+	 * Then multiply opacity on the glyph only; black outline stays.
+	 * alpha < 0 means leave the file's alpha untouched.
+	 */
 	if (!outline) {
+		if (alpha >= 0.0)
+			apply_alpha(padded, dw + margin * 2, dh + margin * 2,
+			    alpha, 0);
 		*w_out = dw + margin * 2;
 		*h_out = dh + margin * 2;
 		return (padded);
@@ -242,6 +288,8 @@ prep_icon(const char *path, double scale, int outline, int *w_out,
 	free(padded);
 	if (outlined == NULL)
 		return (NULL);
+	if (alpha >= 0.0)
+		apply_alpha(outlined, ow, oh, alpha, 1);
 	*w_out = ow;
 	*h_out = oh;
 	return (outlined);
@@ -259,7 +307,7 @@ icon_free(struct icon *ic)
  * head; the list is capped so a chatty session cannot grow unbounded.
  */
 struct icon *
-icon_lookup(const char *spec, double scale, int outline)
+icon_lookup(const char *spec, double scale, double alpha, int outline)
 {
 	struct icon *ic, **pp;
 	char path[BOSD_SPEC_MAX];
@@ -272,10 +320,17 @@ icon_lookup(const char *spec, double scale, int outline)
 		scale = BOSD_SCALE_MIN;
 	if (scale > BOSD_SCALE_MAX)
 		scale = BOSD_SCALE_MAX;
+	if (alpha >= 0.0) {
+		if (alpha < BOSD_ALPHA_MIN)
+			alpha = BOSD_ALPHA_MIN;
+		if (alpha > BOSD_ALPHA_MAX)
+			alpha = BOSD_ALPHA_MAX;
+	} else
+		alpha = BOSD_ALPHA_NATIVE;
 
 	for (pp = &cache_head; (ic = *pp) != NULL; pp = &ic->next) {
 		if (strcmp(ic->path, path) == 0 && ic->scale == scale &&
-		    ic->outline == outline) {
+		    ic->alpha == alpha && ic->outline == outline) {
 			*pp = ic->next;
 			ic->next = cache_head;
 			cache_head = ic;
@@ -283,7 +338,7 @@ icon_lookup(const char *spec, double scale, int outline)
 		}
 	}
 
-	rgba = prep_icon(path, scale, outline, &w, &h);
+	rgba = prep_icon(path, scale, alpha, outline, &w, &h);
 	if (rgba == NULL)
 		return (NULL);
 	ic = calloc(1, sizeof(*ic));
@@ -293,6 +348,7 @@ icon_lookup(const char *spec, double scale, int outline)
 	}
 	strlcpy(ic->path, path, sizeof(ic->path));
 	ic->scale = scale;
+	ic->alpha = alpha;
 	ic->outline = outline;
 	ic->rgba = rgba;
 	ic->w = w;

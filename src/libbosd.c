@@ -19,6 +19,7 @@ bosd_req_init(struct bosd_req *req)
 	memset(req, 0, sizeof(*req));
 	req->hold = BOSD_HOLD_DEF;
 	req->scale = 1.0;
+	req->alpha = BOSD_ALPHA_NATIVE;
 	req->outline = 1;
 	req->gauge = -1;
 	req->gauge_prev = -1;
