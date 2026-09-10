@@ -63,6 +63,7 @@ bosd -n audio -y -20 audio-speakers     # shift up 20 px (positive = down)
 bosd -n audio -x -300 audio-speakers    # shift left 300 px (positive = right)
 bosd -n audio -s 2.0 audio-speakers     # twice the panel-derived size
 bosd -n audio -A 0.8 audio-speakers     # multiply PNG alpha by 0.8 (outline stays opaque)
+bosd -n audio -O 0.5 audio-speakers     # half-opaque outline halo
 bosd -n audio -o audio-speakers         # no outline halo
 bosd -c 3                               # full-screen 3-2-1 countdown
 bosd -n shot -T '\u2713' 1              # big checkmark (escapes decode)

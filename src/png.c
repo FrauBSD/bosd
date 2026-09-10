@@ -183,11 +183,11 @@ add_outline(const unsigned char *src, int w, int h, int stroke,
 }
 
 /*
- * Multiply every pixel's alpha by factor (0..1); RGB unchanged.
- * If skip_black, leave pure-black pixels alone (the outline halo).
+ * Multiply selected pixels' alpha by factor (0..1); RGB unchanged.
+ * which: 0 = all, 1 = non-black (glyph), 2 = black only (outline).
  */
 static void
-apply_alpha(unsigned char *rgba, int w, int h, double alpha, int skip_black)
+apply_alpha(unsigned char *rgba, int w, int h, double alpha, int which)
 {
 	size_t n, i;
 	unsigned q;
@@ -198,8 +198,11 @@ apply_alpha(unsigned char *rgba, int w, int h, double alpha, int skip_black)
 	if (alpha <= 0.0) {
 		for (i = 0; i < n; i++) {
 			unsigned char *p = rgba + i * 4;
+			int black = (p[0] == 0 && p[1] == 0 && p[2] == 0);
 
-			if (skip_black && p[0] == 0 && p[1] == 0 && p[2] == 0)
+			if (which == 1 && black)
+				continue;
+			if (which == 2 && !black)
 				continue;
 			p[3] = 0;
 		}
@@ -211,8 +214,11 @@ apply_alpha(unsigned char *rgba, int w, int h, double alpha, int skip_black)
 	for (i = 0; i < n; i++) {
 		unsigned char *p = rgba + i * 4;
 		unsigned a;
+		int black = (p[0] == 0 && p[1] == 0 && p[2] == 0);
 
-		if (skip_black && p[0] == 0 && p[1] == 0 && p[2] == 0)
+		if (which == 1 && black)
+			continue;
+		if (which == 2 && !black)
 			continue;
 		a = p[3];
 		p[3] = (unsigned char)((a * q + 127) / 255);
@@ -238,8 +244,8 @@ pad_icon_rgba(const unsigned char *src, int w, int h, int margin)
 }
 
 static unsigned char *
-prep_icon(const char *path, double scale, double alpha, int outline,
-    int *w_out, int *h_out)
+prep_icon(const char *path, double scale, double alpha, double oalpha,
+    int outline, int *w_out, int *h_out)
 {
 	unsigned char *src, *scaled, *padded, *outlined;
 	int sw, sh, dw, dh, px, stroke, margin, ow, oh;
@@ -272,7 +278,7 @@ prep_icon(const char *path, double scale, double alpha, int outline,
 	/*
 	 * Build the halo from the file's native coverage first so a low
 	 * or zero -A cannot erase the mask (add_outline wants alpha>=32).
-	 * Then multiply opacity on the glyph only; black outline stays.
+	 * Then -A multiplies glyph alpha; -O multiplies outline alpha.
 	 * alpha < 0 means leave the file's alpha untouched.
 	 */
 	if (!outline) {
@@ -290,6 +296,8 @@ prep_icon(const char *path, double scale, double alpha, int outline,
 		return (NULL);
 	if (alpha >= 0.0)
 		apply_alpha(outlined, ow, oh, alpha, 1);
+	if (oalpha < 1.0)
+		apply_alpha(outlined, ow, oh, oalpha, 2);
 	*w_out = ow;
 	*h_out = oh;
 	return (outlined);
@@ -307,7 +315,8 @@ icon_free(struct icon *ic)
  * head; the list is capped so a chatty session cannot grow unbounded.
  */
 struct icon *
-icon_lookup(const char *spec, double scale, double alpha, int outline)
+icon_lookup(const char *spec, double scale, double alpha, double oalpha,
+    int outline)
 {
 	struct icon *ic, **pp;
 	char path[BOSD_SPEC_MAX];
@@ -327,10 +336,15 @@ icon_lookup(const char *spec, double scale, double alpha, int outline)
 			alpha = BOSD_ALPHA_MAX;
 	} else
 		alpha = BOSD_ALPHA_NATIVE;
+	if (oalpha < BOSD_ALPHA_MIN)
+		oalpha = BOSD_ALPHA_MIN;
+	if (oalpha > BOSD_ALPHA_MAX)
+		oalpha = BOSD_ALPHA_MAX;
 
 	for (pp = &cache_head; (ic = *pp) != NULL; pp = &ic->next) {
 		if (strcmp(ic->path, path) == 0 && ic->scale == scale &&
-		    ic->alpha == alpha && ic->outline == outline) {
+		    ic->alpha == alpha && ic->outline_alpha == oalpha &&
+		    ic->outline == outline) {
 			*pp = ic->next;
 			ic->next = cache_head;
 			cache_head = ic;
@@ -338,7 +352,7 @@ icon_lookup(const char *spec, double scale, double alpha, int outline)
 		}
 	}
 
-	rgba = prep_icon(path, scale, alpha, outline, &w, &h);
+	rgba = prep_icon(path, scale, alpha, oalpha, outline, &w, &h);
 	if (rgba == NULL)
 		return (NULL);
 	ic = calloc(1, sizeof(*ic));
@@ -349,6 +363,7 @@ icon_lookup(const char *spec, double scale, double alpha, int outline)
 	strlcpy(ic->path, path, sizeof(ic->path));
 	ic->scale = scale;
 	ic->alpha = alpha;
+	ic->outline_alpha = oalpha;
 	ic->outline = outline;
 	ic->rgba = rgba;
 	ic->w = w;

@@ -1,13 +1,14 @@
 /*
  * Socket naming, liveness, the show protocol, and icon-spec resolution.
  *
- * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE ALPHA OUTL CNT
- * TCOLOR PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until
+ * Protocol: one datagram per show, "HOLD XOFF YOFF SCALE ALPHA OALPHA
+ * OUTL CNT TCOLOR PFX APX SPEC [BADGE]" -- HOLD in seconds (-1 holds until
  * replaced or cleared), XOFF/YOFF signed shifts in pixels
  * (positive right/down), SCALE a multiplier on the panel-derived
  * size, ALPHA < 0 leaves PNG alpha alone and otherwise multiplies the
  * glyph's alpha (0..1) after the outline halo is drawn from native
  * coverage so the halo stays opaque even at ALPHA 0,
+ * OALPHA multiplies the outline halo's alpha (0..1, default 1),
  * OUTL 1 to halo the glyph and 0 not to, CNT > 0 a countdown
  * (SPEC then a placeholder), -1 large text and -2 small text (SPEC
  * then the text, escapes still encoded), TCOLOR the small-text
@@ -155,9 +156,10 @@ send_show_to(const char *sock, const struct show_req *req)
 	encode_ws(req->prefix, pfx, sizeof(pfx));
 	encode_ws(req->append, apx, sizeof(apx));
 	snprintf(msg, sizeof(msg),
-	    "%.2f %d %d %.3f %.3f %d %d %s %s %s %s%s%s",
+	    "%.2f %d %d %.3f %.3f %.3f %d %d %s %s %s %s%s%s",
 	    req->hold, req->x_off, req->y_off, req->scale, req->alpha,
-	    req->outline, req->text ? -1 : req->small ? -2 : req->count,
+	    req->outline_alpha, req->outline,
+	    req->text ? -1 : req->small ? -2 : req->count,
 	    req->tcolor[0] != '\0' ? req->tcolor : "-", pfx, apx,
 	    req->spec[0] != '\0' ? req->spec : "-",
 	    req->badge[0] != '\0' ? " " : "", req->badge);
@@ -185,7 +187,7 @@ send_clear(void)
 int
 parse_show(const char *buf, struct show_req *req)
 {
-	double hold, scale, alpha;
+	double hold, scale, alpha, oalpha;
 	char name[BOSD_SPEC_MAX];
 	char badge[BOSD_BADGE_MAX];
 	char tcolor[BOSD_COLOR_MAX];
@@ -198,12 +200,14 @@ parse_show(const char *buf, struct show_req *req)
 		req->gauge = -1;
 		req->gauge_prev = -1;
 		req->alpha = BOSD_ALPHA_NATIVE;
+		req->outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
 		return (0);
 	}
 	if (strncmp(buf, "BAR ", 4) == 0) {
 		memset(req, 0, sizeof(*req));
 		req->gauge_prev = -1;
 		req->alpha = BOSD_ALPHA_NATIVE;
+		req->outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
 		n = sscanf(buf + 4, "%lf %d %d %d %31s %d", &hold, &x_off,
 		    &y_off, &req->gauge, req->color, &req->gauge_prev);
 		if (n < 5 || req->gauge < 0)
@@ -221,12 +225,13 @@ parse_show(const char *buf, struct show_req *req)
 
 	badge[0] = '\0';
 	alpha = BOSD_ALPHA_NATIVE;
+	oalpha = BOSD_OUTLINE_ALPHA_DEF;
 	/* Field widths track BOSD_SPEC/BADGE/COLOR/CAPTION_MAX (x4). */
 	n = sscanf(buf,
-	    "%lf %d %d %lf %lf %d %d %31s %255s %255s %1023s %31s",
-	    &hold, &x_off, &y_off, &scale, &alpha, &outline, &count, tcolor,
-	    pfx, apx, name, badge);
-	if (n < 11)
+	    "%lf %d %d %lf %lf %lf %d %d %31s %255s %255s %1023s %31s",
+	    &hold, &x_off, &y_off, &scale, &alpha, &oalpha, &outline,
+	    &count, tcolor, pfx, apx, name, badge);
+	if (n < 12)
 		return (-1);
 	if (hold != -1.0 && hold <= 0.0)
 		hold = BOSD_HOLD_DEF;
@@ -241,9 +246,14 @@ parse_show(const char *buf, struct show_req *req)
 			alpha = BOSD_ALPHA_MAX;
 	} else
 		alpha = BOSD_ALPHA_NATIVE;
+	if (oalpha < BOSD_ALPHA_MIN)
+		oalpha = BOSD_ALPHA_MIN;
+	if (oalpha > BOSD_ALPHA_MAX)
+		oalpha = BOSD_ALPHA_MAX;
 	req->hold = hold;
 	req->scale = scale;
 	req->alpha = alpha;
+	req->outline_alpha = oalpha;
 	req->outline = outline != 0;
 	req->count = count > 0 ? count : 0;
 	req->text = count == -1;

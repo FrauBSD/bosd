@@ -20,6 +20,7 @@ bosd_req_init(struct bosd_req *req)
 	req->hold = BOSD_HOLD_DEF;
 	req->scale = 1.0;
 	req->alpha = BOSD_ALPHA_NATIVE;
+	req->outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
 	req->outline = 1;
 	req->gauge = -1;
 	req->gauge_prev = -1;

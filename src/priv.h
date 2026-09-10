@@ -26,6 +26,7 @@ struct icon {
 	unsigned char	*rgba;
 	double		 scale;
 	double		 alpha;
+	double		 outline_alpha;
 	int		 outline;
 	int		 w, h;
 };
@@ -62,7 +63,7 @@ void	 badge_cleanup(void);
 
 /* png.c */
 struct icon	*icon_lookup(const char *spec, double scale, double alpha,
-		    int outline);
+		    double outline_alpha, int outline);
 void		 icon_cache_clear(void);
 
 /* bar.c */

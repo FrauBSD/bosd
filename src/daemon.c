@@ -129,7 +129,7 @@ main_start(const struct show_req *req)
 		struct icon *ic;
 
 		ic = icon_lookup(req->spec, req->scale, req->alpha,
-		    req->outline);
+		    req->outline_alpha, req->outline);
 		if (ic == NULL) {
 			if (m_kind == M_NONE)
 				hide_overlay();
@@ -334,7 +334,8 @@ show_once(const struct show_req *req)
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
 
-	ic = icon_lookup(req->spec, req->scale, req->alpha, req->outline);
+	ic = icon_lookup(req->spec, req->scale, req->alpha,
+	    req->outline_alpha, req->outline);
 	if (ic == NULL) {
 		fprintf(stderr, "bosd: cannot load icon '%s'\n", req->spec);
 		return (1);

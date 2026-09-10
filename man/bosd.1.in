@@ -23,6 +23,7 @@
 .Op Fl b Ar badge
 .Op Fl G Ar color
 .Op Fl g Ar percent
+.Op Fl O Ar opacity
 .Op Fl P Ar percent
 .Op Fl p Ar text
 .Op Fl s Ar scale
@@ -258,6 +259,20 @@ Each channel has its own overlay and socket.
 Skip the black outline normally drawn behind the glyph for
 legibility on any wallpaper.
 Suited to full-color artwork that carries its own contrast.
+Conflicts with
+.Fl O .
+.It Fl O Ar opacity
+Multiply the black outline halo's alpha by
+.Ar opacity
+.Pq 0.0 to 1.0, default 1.0 .
+The halo is still drawn from the file's native coverage; only its
+opacity changes
+.Pq Fl O Li 0
+hides the outline while leaving the glyph.
+Requires an
+.Ar icon
+with outline enabled; conflicts with
+.Fl o .
 .It Fl p Ar text
 Caption above the artwork, otherwise as
 .Fl a ,

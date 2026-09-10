@@ -17,9 +17,9 @@ usage(void)
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
 	    "       bosd [-Dhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
-	    "            [-b badge] [-G color] [-g percent] [-P percent] "
-	    "[-p text] \\\n"
-	    "            [-s scale] [-x offset] [-y offset] \\\n"
+	    "            [-b badge] [-G color] [-g percent] [-O opacity] "
+	    "[-P percent] \\\n"
+	    "            [-p text] [-s scale] [-x offset] [-y offset] \\\n"
 	    "            { icon | -c countdown | -T text } [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
 	    "[-G color] \\\n"
@@ -72,13 +72,14 @@ main(int argc, char **argv)
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.alpha = BOSD_ALPHA_NATIVE;
+	req.outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
 	req.outline = 1;
 	req.gauge = -1;
 	req.gauge_prev = -1;
 	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
 	while ((ch = getopt(argc, argv,
-	    "A:B:CDF:G:P:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
+	    "A:B:CDF:G:O:P:Ta:b:c:dg:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'A': {
 			char *ep;
@@ -99,6 +100,21 @@ main(int argc, char **argv)
 			Bflag = 1;
 			req.gauge_hold = parse_hold(optarg);
 			break;
+		case 'O': {
+			char *ep;
+
+			errno = 0;
+			req.outline_alpha = strtod(optarg, &ep);
+			if (ep == optarg || *ep != '\0' || errno != 0 ||
+			    req.outline_alpha < BOSD_ALPHA_MIN ||
+			    req.outline_alpha > BOSD_ALPHA_MAX) {
+				fprintf(stderr, "bosd: -O opacity must "
+				    "be %.1f to %.1f\n",
+				    BOSD_ALPHA_MIN, BOSD_ALPHA_MAX);
+				usage();
+			}
+			break;
+		}
 		case 'C':
 			Cflag = 1;
 			break;
@@ -246,6 +262,13 @@ main(int argc, char **argv)
 
 	resolve_ipc_names();
 
+	if (!req.outline &&
+	    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF) {
+		fprintf(stderr,
+		    "bosd: -O sets outline opacity; it conflicts with -o\n");
+		usage();
+	}
+
 	if (dflag || Cflag) {
 		if (dflag && Cflag)
 			usage();
@@ -258,8 +281,9 @@ main(int argc, char **argv)
 		    req.gauge >= 0 || req.badge[0] != '\0' ||
 		    req.tcolor[0] != '\0' || req.prefix[0] != '\0' ||
 		    req.append[0] != '\0' || req.scale != 1.0 ||
-		    req.alpha >= 0.0 || !req.outline || req.x_off != 0 ||
-		    req.y_off != 0)
+		    req.alpha >= 0.0 ||
+		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
+		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
 		if (dflag)
 			return (run_daemon());
@@ -285,8 +309,11 @@ main(int argc, char **argv)
 	    argc == 0) {
 		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
 		    req.append[0] != '\0' || req.scale != 1.0 ||
-		    req.alpha >= 0.0 || !req.outline) {
-			fprintf(stderr, "bosd: -A, -b, -o, -s, -a, -p adorn "
+		    req.alpha >= 0.0 ||
+		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
+		    !req.outline) {
+			fprintf(stderr,
+			    "bosd: -A, -O, -b, -o, -s, -a, -p adorn "
 			    "the artwork, not the bar\n");
 			usage();
 		}
@@ -303,15 +330,17 @@ main(int argc, char **argv)
 		if (tflag && (req.badge[0] != '\0' ||
 		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
 		    req.scale != 1.0 || req.alpha >= 0.0 ||
+		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline)) {
-			fprintf(stderr, "bosd: -A, -b, -o, -s, -a, -p adorn "
+			fprintf(stderr,
+			    "bosd: -A, -O, -b, -o, -s, -a, -p adorn "
 			    "the large artwork; they do not apply to -t\n");
 			usage();
 		}
-		if (!tflag && req.alpha >= 0.0) {
+		if (!tflag && (req.alpha >= 0.0 ||
+		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF)) {
 			fprintf(stderr,
-			    "bosd: -A multiplies PNG alpha; it needs an "
-			    "icon\n");
+			    "bosd: -A and -O need an icon\n");
 			usage();
 		}
 		if (tflag || Tflag) {
