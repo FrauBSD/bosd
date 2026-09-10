@@ -5,7 +5,7 @@
  * black-outlined.  bosd assigns the bar no meaning: it draws the
  * given percentage in the given color.  Above 100% the fill stays
  * full and "N%" sits just past the bar's right edge in the same
- * color.
+ * color, vertically centered on the gauge bar.
  *
  * An optional previous percent (daemon-latched for a bar session)
  * marks short ticks at or above that watermark in a 50% dimmer
@@ -172,7 +172,7 @@ dim_pixel(Colormap cmap, XColor src, unsigned long fallback)
 
 /* Overage label: square black outline passes, then the fill. */
 static void
-bar_label(const char *s, int x, int grow_pass, unsigned long pixel)
+bar_label(const char *s, int x, int base, int grow_pass, unsigned long pixel)
 {
 	int len = (int)strlen(s), dx, dy;
 
@@ -183,15 +183,13 @@ bar_label(const char *s, int x, int grow_pass, unsigned long pixel)
 				if (dx == 0 && dy == 0)
 					continue;
 				XmbDrawString(dpy, pix, fset, pgc, x + dx,
-				    ascent + BAR_OUTL + dy, s, len);
+				    base + dy, s, len);
 				XmbDrawString(dpy, mask, fset, mgc, x + dx,
-				    ascent + BAR_OUTL + dy, s, len);
+				    base + dy, s, len);
 			}
 	} else {
-		XmbDrawString(dpy, pix, fset, pgc, x, ascent + BAR_OUTL,
-		    s, len);
-		XmbDrawString(dpy, mask, fset, mgc, x, ascent + BAR_OUTL,
-		    s, len);
+		XmbDrawString(dpy, pix, fset, pgc, x, base, s, len);
+		XmbDrawString(dpy, mask, fset, mgc, x, base, s, len);
 	}
 }
 
@@ -265,11 +263,22 @@ bar_show(const struct show_req *req)
 	bar_paint(on, prev_on, bx, fill_px, dim_px, black);
 
 	if (req->gauge > 100) {
+		XRectangle ink, logical;
+		int base, len;
+
 		snprintf(label, sizeof(label), "%d%%", req->gauge);
+		len = (int)strlen(label);
+		XmbTextExtents(fset, label, len, &ink, &logical);
+		/*
+		 * Tall ticks span [BAR_OUTL, BAR_OUTL+ascent).  Place the
+		 * baseline so the label's ink centerline matches the bar's,
+		 * not the old bottom-aligned baseline (ascent+BAR_OUTL).
+		 */
+		base = BAR_OUTL + ascent / 2 - (ink.y + ink.height / 2);
 		x = (w + BAR_TICKS * (ascent / 2)) / 2 + OVER_GAP +
 		    TEXT_XOFF;
-		bar_label(label, x, 1, black);
-		bar_label(label, x, 0, fill_px);
+		bar_label(label, x, base, 1, black);
+		bar_label(label, x, base, 0, fill_px);
 	}
 
 	XShapeCombineMask(dpy, bwin, ShapeBounding, 0, 0, mask, ShapeSet);
