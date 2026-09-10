@@ -153,9 +153,11 @@ Requires
 .It Fl b Ar badge
 Draw
 .Ar badge
-as a superscript at the glyph's upper right
-.Pq about a quarter of the glyph height, black-outlined ;
-fill color is
+as a superscript just past the artwork's rightmost ink, with its
+baseline above the ink
+.Pq about a quarter of the glyph height, black-outlined ,
+so a sparse canvas does not park the label over empty padding.
+Fill color is
 .Fl F
 .Pq default white .
 Used for index digits and short labels
