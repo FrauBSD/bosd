@@ -189,7 +189,7 @@ countdown_begin(const struct show_req *req)
 		int bps = pointsize * 26 / 100;
 
 		snprintf(pattern, sizeof(pattern),
-		    "DejaVu Sans:bold:size=%d:antialias=true",
+		    "DejaVu Sans:size=%d:antialias=true",
 		    bps < 16 ? 16 : bps);
 		bfont = XftFontOpenName(dpy, screen, pattern);
 	}
@@ -221,7 +221,7 @@ countdown_tick(const struct show_req *req, int digit)
 	XGlyphInfo extents, ref;
 	XftColor clear;
 	char buf[16];
-	int x, y, bx, by, bstroke, len;
+	int x, y, bx, by, bstroke, gap, len;
 
 	raise_overlay();
 	memset(&clear, 0, sizeof(clear));
@@ -230,6 +230,11 @@ countdown_tick(const struct show_req *req, int digit)
 	snprintf(buf, sizeof(buf), "%d", digit);
 	len = (int)strlen(buf);
 	XftTextExtentsUtf8(dpy, font, (const FcChar8 *)buf, len, &extents);
+	bstroke = 0;
+	if (bfont != NULL && stroke > 0)
+		bstroke = stroke / 3 < 3 ? 3 : stroke / 3;
+	/* Same idea as caption clearance: past both outlines, plus air. */
+	gap = stroke * 2 + bstroke + 28;
 	if (len > 1) {
 		/*
 		 * Variable-width digits jitter if recentered per tick:
@@ -241,7 +246,7 @@ countdown_tick(const struct show_req *req, int digit)
 			lock_x = win_w / 2 - stroke / 2 -
 			    (int)extents.width / 2 + (int)extents.x;
 			lock_bx = lock_x - (int)extents.x +
-			    (int)extents.width + stroke + 8;
+			    (int)extents.width + gap;
 		}
 		x = lock_x + req->x_off;
 		bx = lock_bx + req->x_off;
@@ -252,17 +257,16 @@ countdown_tick(const struct show_req *req, int digit)
 		x = win_w / 2 - stroke / 2 - (int)ref.width / 2 -
 		    (int)ref.x + ((int)ref.width - (int)extents.width) / 2 +
 		    ((int)extents.x - (int)ref.x) + req->x_off;
-		bx = win_w / 2 - stroke / 2 + (int)ref.width / 2 + stroke +
-		    8 + req->x_off;
+		/* Badge stays on the slot's right, not the current digit. */
+		bx = win_w / 2 - stroke / 2 + (int)ref.width / 2 + gap +
+		    req->x_off;
 	}
 	y = (win_h + font->ascent - font->descent) / 2 + req->y_off;
 	draw_outlined(font, x, y, buf, stroke);
 
-	/* Badge superscript off the digits' upper right. */
+	/* Badge superscript off the digits' upper right (slot-stable). */
 	if (bfont != NULL) {
-		by = y - font->ascent + bfont->ascent;
-		bstroke = stroke > 0 ?
-		    (stroke / 3 < 3 ? 3 : stroke / 3) : 0;
+		by = y - font->ascent + bfont->ascent - bfont->ascent / 5;
 		draw_outlined(bfont, bx, by, req->badge, bstroke);
 	}
 	draw_caps(req, y);
@@ -290,10 +294,11 @@ text_tick(const struct show_req *req)
 	draw_outlined(font, x, y, text_buf, stroke);
 
 	if (bfont != NULL) {
-		bx = x - (int)extents.x + (int)extents.width + stroke + 8;
-		by = y - font->ascent + bfont->ascent;
 		bstroke = stroke > 0 ?
 		    (stroke / 3 < 3 ? 3 : stroke / 3) : 0;
+		bx = x - (int)extents.x + (int)extents.width +
+		    stroke * 2 + bstroke + 28;
+		by = y - font->ascent + bfont->ascent - bfont->ascent / 5;
 		draw_outlined(bfont, bx, by, req->badge, bstroke);
 	}
 	draw_caps(req, y);

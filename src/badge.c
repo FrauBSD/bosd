@@ -29,11 +29,11 @@ open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
 	}
 
 	snprintf(pattern, sizeof(pattern),
-	    "DejaVu Sans:bold:pixelsize=%d:antialias=true", pixelsize);
+	    "DejaVu Sans:pixelsize=%d:antialias=true", pixelsize);
 	font = XftFontOpenName(dpy, screen, pattern);
 	if (font == NULL) {
 		snprintf(pattern, sizeof(pattern),
-		    "Sans:bold:pixelsize=%d:antialias=true", pixelsize);
+		    "Sans:pixelsize=%d:antialias=true", pixelsize);
 		font = XftFontOpenName(dpy, screen, pattern);
 	}
 	*slot = font;
