@@ -15,7 +15,7 @@
 .Op Fl n Ar instance
 .Bro Fl d | Fl C Brc
 .Nm
-.Op Fl Dhov
+.Op Fl CDhov
 .Op Fl n Ar instance
 .Op Fl A Ar opacity
 .Op Fl a Ar text
@@ -34,7 +34,7 @@
 .Bro Ar icon | Fl c Ar countdown | Fl T Ar text Brc
 .Op Ar hold_seconds
 .Nm
-.Op Fl Dhv
+.Op Fl CDhv
 .Op Fl n Ar instance
 .Op Fl B Ar seconds
 .Op Fl F Ar color
@@ -48,7 +48,7 @@
 .Fl t Ar text
 .Op Ar hold_seconds
 .Nm
-.Op Fl Dhv
+.Op Fl CDhv
 .Op Fl n Ar instance
 .Op Fl B Ar seconds
 .Op Fl G Ar color
@@ -80,7 +80,9 @@ Small text centers near the bottom of the same panel, stacked
 above the gauge bar's band so the two never overlap.
 The gauge bar runs on an independent timer, so a gauge and a
 glyph can be up at once: a new gauge replaces the gauge, new
-artwork replaces the artwork, and neither clears the other.
+artwork replaces the artwork, and neither clears the other
+.Pq unless Fl C is given with the new request, which clears both
+slots first .
 A warm daemon keeps both on screen and repaints in place, so
 rapid key repeats never flash.
 .Pp
@@ -175,9 +177,18 @@ badges as
 .Dq a b .
 .It Fl C
 Clear the channel's display, artwork and gauge alike.
-An in-progress countdown or an indefinite
-.Pq \-1
-hold included, returning immediately.
+Alone, it drops whatever is showing
+.Pq including an in-progress countdown or an indefinite \-1 hold
+and returns immediately.
+Alongside
+.Fl g ,
+.Fl t ,
+.Fl c ,
+.Fl T ,
+or an
+.Ar icon
+it clears both slots first, then paints that request so leftovers
+from the other slot do not remain.
 Without a running daemon there is nothing to clear.
 .It Fl c Ar countdown
 Count down from

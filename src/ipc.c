@@ -18,11 +18,12 @@
  * ("-" when absent, whitespace escaped in flight), SPEC otherwise
  * an absolute path or a bare name resolved against BOSD_PATH / the
  * compiled share directory (".png" appended when missing).  A bare
- * "CLEAR" hides the active render(s).  A gauge travels separately
- * as "BAR HOLD XOFF YOFF PCT COLOR [PREV]" and coexists with the
- * artwork.  PREV is an optional prior-percent watermark (-1 or
- * omitted disables); the daemon latches the first PREV when the bar
- * appears and ignores later ones until the bar hides.
+ * "CLEAR" hides the active render(s).  A show with clear set sends
+ * CLEAR first so artwork and gauge both drop before the new paint.
+ * A gauge travels separately as "BAR HOLD XOFF YOFF PCT COLOR [PREV]"
+ * and coexists with the artwork.  PREV is an optional prior-percent
+ * watermark (-1 or omitted disables); the daemon latches the first
+ * PREV when the bar appears and ignores later ones until the bar hides.
  */
 #include <signal.h>
 #include <stdio.h>
@@ -143,6 +144,14 @@ send_show_to(const char *sock, const struct show_req *req)
 	char msg[BOSD_MSG_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 	char font[BOSD_FONT_MAX * 4];
+
+	/*
+	 * Drop every slot first when asked, so a follow-up gauge or
+	 * glyph does not share the panel with a leftover from the
+	 * other slot (bosd -C -g …, bosd -C icon, …).
+	 */
+	if (req->clear && send_dgram(sock, "CLEAR") != 0)
+		return (-1);
 
 	if (req->gauge >= 0) {
 		snprintf(msg, sizeof(msg), "BAR %.2f %d %d %d %s %d",

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"5.5"
+#define BOSD_VERSION	"5.6"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
@@ -48,7 +48,7 @@ struct bosd_req {
 	int	 count;		/* >0: countdown digits */
 	int	 text;		/* 1: large outlined text in spec */
 	int	 small;		/* 1: small caption text in spec */
-	int	 clear;		/* internal: set by the daemon parser */
+	int	 clear;		/* 1: hide artwork+bar before this show */
 	int	 gauge;		/* >=0: bar percent; -1 = no bar */
 	double	 gauge_hold;	/* bar's own hold */
 	char	 color[BOSD_COLOR_MAX];	/* bar fill */

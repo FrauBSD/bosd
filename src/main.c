@@ -15,23 +15,34 @@ usage(void)
 {
 	fprintf(stderr,
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
-	    "       bosd [-Dhov] [-n instance] [-A opacity] [-a text] "
+	    "       bosd [-CDhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
 	    "            [-b badge] [-F color] [-f font] [-G color] "
 	    "[-g percent] \\\n"
 	    "            [-O opacity] [-P percent] [-p text] [-s scale] "
 	    "[-x offset] \\\n"
-	    "            [-y offset] \\\n"
-	    "            { icon | -c countdown | -T text } [hold_seconds]\n"
-	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
+	    "            [-y offset] { icon | -c countdown | -T text } "
+	    "[hold_seconds]\n"
+	    "       bosd [-CDhv] [-n instance] [-B seconds] [-F color] "
 	    "[-f font] \\\n"
 	    "            [-G color] [-g percent] [-P percent] [-s scale] "
 	    "[-x offset] \\\n"
 	    "            [-y offset] -t text [hold_seconds]\n"
-	    "       bosd [-Dhv] [-n instance] [-B seconds] [-G color] "
+	    "       bosd [-CDhv] [-n instance] [-B seconds] [-G color] "
 	    "[-P percent] \\\n"
 	    "            [-x offset] [-y offset] -g percent\n");
 	exit(1);
+}
+
+/*
+ * When painting locally after -C, drop whatever the channel daemon
+ * still shows so the panel is empty before this process draws.
+ */
+static void
+clear_channel_if_asked(const struct show_req *req)
+{
+	if (req->clear && daemon_alive())
+		(void)send_clear();
 }
 
 /* Interpret escapes in a display-text field before local render. */
@@ -281,29 +292,48 @@ main(int argc, char **argv)
 		usage();
 	}
 
-	if (dflag || Cflag) {
-		if (dflag && Cflag)
-			usage();
-		if (Dflag && Cflag) {
-			fprintf(stderr, "bosd: -D renders directly and "
-			    "cannot clear a daemon's display (-C)\n");
-			usage();
-		}
-		if (Dflag || argc != 0 || count != 0 || tflag || Tflag ||
-		    req.gauge >= 0 || req.badge[0] != '\0' ||
+	if (dflag) {
+		if (Cflag || Dflag || argc != 0 || count != 0 || tflag ||
+		    Tflag || req.gauge >= 0 || req.badge[0] != '\0' ||
 		    req.tcolor[0] != '\0' || req.font[0] != '\0' ||
-		    req.prefix[0] != '\0' ||
-		    req.append[0] != '\0' || req.scale != 1.0 ||
-		    req.alpha >= 0.0 ||
+		    req.prefix[0] != '\0' || req.append[0] != '\0' ||
+		    req.scale != 1.0 || req.alpha >= 0.0 ||
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
-		if (dflag)
-			return (run_daemon());
-		/* Clear: nothing to do when no daemon owns the channel. */
-		if (daemon_alive())
-			return (send_clear() != 0);
-		return (0);
+		return (run_daemon());
+	}
+
+	/*
+	 * -C alone clears.  With a show (-g/-t/-c/-T/icon) it means
+	 * clear every slot first, then paint the request.
+	 */
+	if (Cflag) {
+		int showing = (argc > 0 || count > 0 || tflag || Tflag ||
+		    req.gauge >= 0);
+
+		if (!showing) {
+			if (Dflag) {
+				fprintf(stderr, "bosd: -D renders directly "
+				    "and cannot clear a daemon's display "
+				    "(-C)\n");
+				usage();
+			}
+			if (req.badge[0] != '\0' ||
+			    req.tcolor[0] != '\0' || req.font[0] != '\0' ||
+			    req.prefix[0] != '\0' ||
+			    req.append[0] != '\0' || req.scale != 1.0 ||
+			    req.alpha >= 0.0 ||
+			    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
+			    !req.outline || req.x_off != 0 ||
+			    req.y_off != 0 || Bflag || Pflag ||
+			    req.color[0] != '\0')
+				usage();
+			if (daemon_alive())
+				return (send_clear() != 0);
+			return (0);
+		}
+		req.clear = 1;
 	}
 
 	if (req.gauge < 0 && (Bflag || Pflag || req.color[0] != '\0')) {
@@ -341,6 +371,7 @@ main(int argc, char **argv)
 		}
 		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
+		clear_channel_if_asked(&req);
 		return (run_bar(&req));
 	}
 
@@ -407,6 +438,7 @@ main(int argc, char **argv)
 		}
 		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
+		clear_channel_if_asked(&req);
 		decode_field(req.badge, sizeof(req.badge));
 		decode_field(req.prefix, sizeof(req.prefix));
 		decode_field(req.append, sizeof(req.append));
@@ -430,6 +462,7 @@ main(int argc, char **argv)
 	if (!Dflag && daemon_alive() && send_show(&req) == 0)
 		return (0);
 
+	clear_channel_if_asked(&req);
 	decode_field(req.badge, sizeof(req.badge));
 	decode_field(req.prefix, sizeof(req.prefix));
 	decode_field(req.append, sizeof(req.append));
