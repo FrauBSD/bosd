@@ -1,11 +1,12 @@
 /*
  * Daemon event loop and the socketless one-shot fallback.
  *
- * Two independent slots: the main show (icon, countdown, text) and
- * the gauge bar, each with its own window and its own expiry.  A bar
- * replaces a bar and a main show replaces a main show; neither
- * touches the other, so a gauge and a glyph can be up at once.  CLEAR
- * drops both.
+ * Three independent slots: the main show (icon, countdown, large
+ * text), the gauge bar, and small caption text (-t), each with its
+ * own window and its own expiry.  A bar replaces a bar, a main show
+ * replaces a main show, and a caption replaces a caption; none
+ * touches the others, so a glyph, a gauge, and a -t caption can be
+ * up at once.  CLEAR drops all three.
  */
 #include <errno.h>
 #include <poll.h>
@@ -23,8 +24,8 @@
 volatile sig_atomic_t stop;
 int sock = -1;
 
-/* Main-show slot. */
-enum { M_NONE, M_ICON, M_COUNT, M_TEXT, M_STEXT };
+/* Main-show slot (icon, countdown, large text). */
+enum { M_NONE, M_ICON, M_COUNT, M_TEXT };
 static int m_kind;
 static struct show_req m_req;
 static double m_deadline;	/* next tick or expiry; < 0 never */
@@ -36,6 +37,10 @@ static int b_active;
 static double b_deadline;
 static int b_held_prev = -1;	/* latched -P until the bar hides */
 static double b_held_hold = BOSD_GAUGE_HOLD_DEF;	/* latched -B */
+
+/* Small-caption slot (-t). */
+static int s_active;
+static double s_deadline;
 
 void
 cleanup(int sig __unused)
@@ -71,8 +76,6 @@ main_stop(void)
 {
 	if (m_kind == M_COUNT || m_kind == M_TEXT)
 		countdown_end();
-	if (m_kind == M_STEXT)
-		stext_hide();
 	else if (m_kind != M_NONE)
 		hide_overlay();
 	m_kind = M_NONE;
@@ -80,26 +83,33 @@ main_stop(void)
 }
 
 static void
+stext_stop(void)
+{
+	if (s_active) {
+		stext_hide();
+		s_active = 0;
+	}
+}
+
+static void
+stext_start(const struct show_req *req)
+{
+	if (stext_show(req) != 0) {
+		stext_stop();
+		return;
+	}
+	s_active = 1;
+	s_deadline = expiry(req->hold);
+}
+
+static void
 main_start(const struct show_req *req)
 {
 	if (m_kind == M_COUNT || m_kind == M_TEXT)
 		countdown_end();
-	/* Renderer swap: the outgoing artwork's window must go. */
-	if (m_kind == M_STEXT && !req->small)
-		stext_hide();
-	else if (m_kind != M_NONE && m_kind != M_STEXT && req->small)
+	else if (m_kind != M_NONE)
 		hide_overlay();
 
-	if (req->small) {
-		m_req = *req;
-		if (stext_show(&m_req) != 0) {
-			main_stop();
-			return;
-		}
-		m_kind = M_STEXT;
-		m_deadline = expiry(m_req.hold);
-		return;
-	}
 	if (req->count > 0) {
 		m_req = *req;
 		if (countdown_begin(&m_req) != 0) {
@@ -168,6 +178,9 @@ next_timeout(void)
 	if (b_active && b_deadline >= 0.0 &&
 	    (next < 0.0 || b_deadline < next))
 		next = b_deadline;
+	if (s_active && s_deadline >= 0.0 &&
+	    (next < 0.0 || s_deadline < next))
+		next = s_deadline;
 	if (next < 0.0)
 		return (1000);
 	now = now_monotonic();
@@ -183,8 +196,8 @@ drain_socket(int sockfd)
 {
 	char buf[BOSD_MSG_MAX];
 	struct show_req req;
-	int have_main = 0, have_bar = 0;
-	struct show_req mreq, breq;
+	int have_main = 0, have_bar = 0, have_stext = 0;
+	struct show_req mreq, breq, sreq;
 	ssize_t n;
 
 	for (;;) {
@@ -197,17 +210,24 @@ drain_socket(int sockfd)
 		if (req.clear) {
 			main_stop();
 			bar_hide();
+			stext_stop();
 			b_active = 0;
 			b_held_prev = -1;
 			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 			have_main = 0;
 			have_bar = 0;
+			have_stext = 0;
 			continue;
 		}
 		if (req.gauge >= 0) {
 			breq = req;
 			have_bar = 1;
-		} else {
+		}
+		if (req.small) {
+			sreq = req;
+			have_stext = 1;
+		} else if (req.count > 0 || req.text ||
+		    req.spec[0] != '\0') {
 			mreq = req;
 			have_main = 1;
 		}
@@ -237,6 +257,8 @@ drain_socket(int sockfd)
 			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 		}
 	}
+	if (have_stext)
+		stext_start(&sreq);
 	if (have_main)
 		main_start(&mreq);
 }
@@ -310,6 +332,8 @@ run_daemon(void)
 			b_held_prev = -1;
 			b_held_hold = BOSD_GAUGE_HOLD_DEF;
 		}
+		if (s_active && s_deadline >= 0.0 && now >= s_deadline)
+			stext_stop();
 
 		if (pfd.revents & POLLIN)
 			drain_socket(sock);

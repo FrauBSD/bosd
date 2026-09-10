@@ -78,12 +78,16 @@ when no primary is set, on the laptop's built-in panel
 and failing both, on the X screen as a whole.
 Small text centers near the bottom of the same panel, stacked
 above the gauge bar's band so the two never overlap.
-The gauge bar runs on an independent timer, so a gauge and a
-glyph can be up at once: a new gauge replaces the gauge, new
-artwork replaces the artwork, and neither clears the other
-.Pq unless Fl C is given with the new request, which clears both
-slots first .
-A warm daemon keeps both on screen and repaints in place, so
+The gauge bar and small caption text
+.Pq Fl t
+each run on an independent timer alongside the main artwork, so a
+gauge, a glyph, and a caption can be up at once: a new gauge
+replaces the gauge, new artwork replaces the artwork, a new
+.Fl t
+replaces the caption, and none clears the others
+.Pq unless Fl C is given with the new request, which clears every
+slot first .
+A warm daemon keeps them on screen and repaints in place, so
 rapid key repeats never flash.
 .Pp
 The options are as follows:
@@ -176,7 +180,7 @@ so
 badges as
 .Dq a b .
 .It Fl C
-Clear the channel's display, artwork and gauge alike.
+Clear the channel's display: artwork, gauge, and small caption alike.
 Alone, it drops whatever is showing
 .Pq including an in-progress countdown or an indefinite \-1 hold
 and returns immediately.
@@ -187,8 +191,8 @@ Alongside
 .Fl T ,
 or an
 .Ar icon
-it clears both slots first, then paints that request so leftovers
-from the other slot do not remain.
+it clears every slot first, then paints that request so leftovers
+from the other slots do not remain.
 Without a running daemon there is nothing to clear.
 .It Fl c Ar countdown
 Count down from
@@ -454,9 +458,18 @@ at the scaled size.
 Lines split on newline
 .Pq escape Ql \ex0a ,
 center individually, and grow downward.
-Replaces
-.Ar icon
-and is dispatched like one; the gauge bar is independent.
+Has its own slot and hold on the channel: only another
+.Fl t
+or
+.Fl C
+replaces it; an
+.Ar icon ,
+.Fl c ,
+.Fl T ,
+or
+.Fl g
+leaves it alone
+.Pq and vice versa .
 Escapes decode as with
 .Fl T ;
 literal whitespace is not permitted
