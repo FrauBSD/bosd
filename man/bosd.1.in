@@ -93,7 +93,7 @@ rapid key repeats never flash.
 The options are as follows:
 .Bl -tag -width "-n instance"
 .It Fl A Ar opacity
-Multiply the artwork fill's alpha by
+Set the artwork fill's peak opacity to
 .Ar opacity
 .Pq 0.0 to 1.0 .
 On an
@@ -107,8 +107,11 @@ with
 the outline halo is still drawn from the file's native coverage and
 stays at its
 .Fl O
-opacity while only the glyph is multiplied
-.Pq an 80% pixel with Fl A Li 0.5 becomes 40%;
+opacity while the glyph's alpha channel is remapped so its peak
+becomes
+.Ar opacity
+.Pq soft edges scale with it: an 80% file with Fl A Li 0.5 peaks at
+50%, with Fl A Li 0.9 at 90%, with Fl A Li 1 fully opaque;
 .Fl A Li 0
 leaves an outline with an invisible glyph .
 On
@@ -350,14 +353,17 @@ Suited to full-color artwork that carries its own contrast.
 Conflicts with
 .Fl O .
 .It Fl O Ar opacity
-Multiply the black outline halo's alpha by
+Set the black outline halo's peak opacity to
 .Ar opacity
 .Pq 0.0 to 1.0, default 1.0 .
 On an
 .Ar icon
-the halo is still drawn from the file's native coverage; only its
-opacity changes
-.Pq Fl O Li 0
+the halo is still drawn from the file's native coverage; its alpha
+is remapped so the peak becomes
+.Ar opacity
+.Pq Fl O Li 1
+a fully opaque halo;
+.Fl O Li 0
 hides the outline while leaving the glyph .
 On
 .Fl c

@@ -216,18 +216,40 @@ add_outline(const unsigned char *src, int w, int h, int stroke,
 }
 
 /*
- * Multiply selected pixels' alpha by factor (0..1); RGB unchanged.
- * which: 0 = all, 1 = non-black (glyph), 2 = black only (outline).
+ * Remap selected pixels' alpha so the selection's peak becomes
+ * factor*255 (RGB unchanged).  which: 0 = all, 1 = non-black (glyph),
+ * 2 = black only (outline).
+ *
+ * factor is absolute fill/halo opacity, not a multiplier on the file:
+ * an 80% PNG with -A 0.9 peaks at 90%, with -A 1 at 100%, with no -A
+ * left at 80%.  AA falloff scales with the peak, so there is no cliff
+ * between 0.99 and 1.0.  factor < 0 leaves pixels alone.
  */
 static void
 apply_alpha(unsigned char *rgba, int w, int h, double alpha, int which)
 {
 	size_t n, i;
-	unsigned q;
+	unsigned peak, target;
 
-	if (alpha < 0.0 || alpha >= 1.0)
+	if (alpha < 0.0)
 		return;
 	n = (size_t)w * (size_t)h;
+
+	peak = 0;
+	for (i = 0; i < n; i++) {
+		unsigned char *p = rgba + i * 4;
+		int black = (p[0] == 0 && p[1] == 0 && p[2] == 0);
+
+		if (which == 1 && black)
+			continue;
+		if (which == 2 && !black)
+			continue;
+		if (p[3] > peak)
+			peak = p[3];
+	}
+	if (peak == 0)
+		return;
+
 	if (alpha <= 0.0) {
 		for (i = 0; i < n; i++) {
 			unsigned char *p = rgba + i * 4;
@@ -241,9 +263,12 @@ apply_alpha(unsigned char *rgba, int w, int h, double alpha, int which)
 		}
 		return;
 	}
-	q = (unsigned)(alpha * 255.0 + 0.5);
-	if (q > 255)
-		q = 255;
+
+	target = (unsigned)(alpha * 255.0 + 0.5);
+	if (target > 255)
+		target = 255;
+	if (target == peak)
+		return;
 	for (i = 0; i < n; i++) {
 		unsigned char *p = rgba + i * 4;
 		unsigned a;
@@ -254,7 +279,7 @@ apply_alpha(unsigned char *rgba, int w, int h, double alpha, int which)
 		if (which == 2 && !black)
 			continue;
 		a = p[3];
-		p[3] = (unsigned char)((a * q + 127) / 255);
+		p[3] = (unsigned char)((a * target + peak / 2) / peak);
 	}
 }
 
@@ -311,8 +336,9 @@ prep_icon(const char *path, double scale, double alpha, double oalpha,
 	/*
 	 * Build the halo from the file's native coverage first so a low
 	 * or zero -A cannot erase the mask (add_outline dilates alpha).
-	 * Then -A multiplies glyph alpha; -O multiplies outline alpha.
-	 * alpha < 0 means leave the file's alpha untouched.
+	 * Then -A / -O remap glyph and outline peaks to the requested
+	 * opacity (AA scales with the peak).  alpha < 0 leaves the
+	 * file's glyph alpha alone; outline still takes oalpha.
 	 */
 	if (!outline) {
 		if (alpha >= 0.0)
@@ -329,8 +355,7 @@ prep_icon(const char *path, double scale, double alpha, double oalpha,
 		return (NULL);
 	if (alpha >= 0.0)
 		apply_alpha(outlined, ow, oh, alpha, 1);
-	if (oalpha < 1.0)
-		apply_alpha(outlined, ow, oh, oalpha, 2);
+	apply_alpha(outlined, ow, oh, oalpha, 2);
 	*w_out = ow;
 	*h_out = oh;
 	return (outlined);
