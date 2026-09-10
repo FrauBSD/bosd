@@ -62,11 +62,11 @@ outlined_string(XftDraw *draw, XftFont *font, int x, int y,
 }
 
 /*
- * White fill with a black outline (no surrounding disc).  Reads as an
- * index/label; artwork stays centered.
+ * White fill (or caller color) with a black outline (no surrounding
+ * disc).  Reads as an index/label; artwork stays centered.
  */
 void
-draw_badge(const struct icon *ic, const char *text)
+draw_badge(const struct icon *ic, const char *text, const char *color)
 {
 	XftFont *font;
 	XftDraw *draw;
@@ -74,10 +74,12 @@ draw_badge(const struct icon *ic, const char *text)
 	XGlyphInfo ext;
 	int screen, pixelsize, stroke, text_x, text_y;
 	int target_h, tlen;
+	const char *fill;
 
 	if (text == NULL || text[0] == '\0')
 		return;
 	tlen = (int)strlen(text);
+	fill = (color != NULL && color[0] != '\0') ? color : "white";
 
 	screen = DefaultScreen(dpy);
 
@@ -111,7 +113,7 @@ draw_badge(const struct icon *ic, const char *text)
 	if (draw == NULL)
 		return;
 	if (!XftColorAllocName(dpy, visual, cmap, "black", &bg) ||
-	    !XftColorAllocName(dpy, visual, cmap, "white", &fg)) {
+	    !XftColorAllocName(dpy, visual, cmap, fill, &fg)) {
 		XftDrawDestroy(draw);
 		return;
 	}

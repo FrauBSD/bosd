@@ -54,7 +54,8 @@ void	 hide_overlay(void);
 void	 x11_cleanup(void);
 
 /* badge.c */
-void	 draw_badge(const struct icon *, const char *text);
+void	 draw_badge(const struct icon *, const char *text,
+		    const char *color);
 int	 caption_px(const struct icon *);
 int	 caption_gap(void);
 void	 caption_measure(const char *text, int px, int *w, int *h);

@@ -19,11 +19,12 @@
 
 static XftFont	*font, *bfont, *cfont;
 static XftDraw	*draw;
-static XftColor	 fg, bg;
 static int	 stroke, cstroke;
 static int	 lock_len, lock_x, lock_bx;
 static double	 fill_alpha = 1.0, outline_alpha = 1.0;
 static char	 text_buf[BOSD_SPEC_MAX];
+static char	 text_color[BOSD_COLOR_MAX];	/* -T fill; digits stay white */
+static char	 badge_color[BOSD_COLOR_MAX];
 
 static void
 on_signal(int sig __unused)
@@ -173,7 +174,7 @@ punch_fill_from_outline(Pixmap opix, Pixmap fpix, int iw, int ih)
 
 static Pixmap
 stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
-    int fill, int iw, int ih)
+    const char *color, int iw, int ih)
 {
 	XftDraw *td;
 	XftColor ink;
@@ -182,6 +183,7 @@ stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
 	Pixmap pix;
 	Picture tp;
 	int dx, dy;
+	int fill = (color != NULL);
 
 	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
 	if (fmt == NULL)
@@ -195,7 +197,7 @@ stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
 	td = XftDrawCreate(dpy, pix, visual, cmap);
 	if (td == NULL ||
 	    !XftColorAllocName(dpy, visual, cmap,
-	    fill ? "white" : "black", &ink)) {
+	    fill ? color : "black", &ink)) {
 		if (td != NULL)
 			XftDrawDestroy(td);
 		XFreePixmap(dpy, pix);
@@ -220,14 +222,21 @@ stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
 }
 
 static void
-draw_outlined(XftFont *f, int x, int y, const char *text, int s)
+draw_outlined(XftFont *f, int x, int y, const char *text, int s,
+    const char *color)
 {
 	XGlyphInfo e;
+	XftColor fg, bg;
 	Pixmap opix = None, fpix = None;
 	int len, dx, dy, ox, oy, iw, ih, lx, ly;
 
 	len = (int)strlen(text);
+	if (color == NULL || color[0] == '\0')
+		color = "white";
 	if (fill_alpha >= 1.0 && outline_alpha >= 1.0) {
+		if (!XftColorAllocName(dpy, visual, cmap, color, &fg) ||
+		    !XftColorAllocName(dpy, visual, cmap, "black", &bg))
+			return;
 		for (dx = -s; dx <= s; dx++) {
 			for (dy = -s; dy <= s; dy++) {
 				if (dx == 0 && dy == 0)
@@ -238,6 +247,8 @@ draw_outlined(XftFont *f, int x, int y, const char *text, int s)
 		}
 		XftDrawStringUtf8(draw, &fg, f, x, y, (const FcChar8 *)text,
 		    len);
+		XftColorFree(dpy, visual, cmap, &fg);
+		XftColorFree(dpy, visual, cmap, &bg);
 		return;
 	}
 
@@ -254,9 +265,9 @@ draw_outlined(XftFont *f, int x, int y, const char *text, int s)
 	ly = y - oy;
 
 	if (s > 0 && outline_alpha > 0.0)
-		opix = stamp_xft(f, lx, ly, text, len, s, 0, iw, ih);
+		opix = stamp_xft(f, lx, ly, text, len, s, NULL, iw, ih);
 	if (fill_alpha > 0.0 || opix != None)
-		fpix = stamp_xft(f, lx, ly, text, len, s, 1, iw, ih);
+		fpix = stamp_xft(f, lx, ly, text, len, s, color, iw, ih);
 	/* Even when -A is 0 we need the fill mask to hollow the halo. */
 	if (opix != None && fpix != None)
 		punch_fill_from_outline(opix, fpix, iw, ih);
@@ -286,14 +297,14 @@ draw_caps(const struct show_req *req, int y)
 		    (int)strlen(req->prefix), &e);
 		cx = (win_w - (int)e.width) / 2 + e.x + req->x_off;
 		cy = y - font->ascent - gap - cfont->descent;
-		draw_outlined(cfont, cx, cy, req->prefix, cstroke);
+		draw_outlined(cfont, cx, cy, req->prefix, cstroke, "white");
 	}
 	if (req->append[0] != '\0') {
 		XftTextExtentsUtf8(dpy, cfont, (const FcChar8 *)req->append,
 		    (int)strlen(req->append), &e);
 		cx = (win_w - (int)e.width) / 2 + e.x + req->x_off;
 		cy = y + font->descent + gap + cfont->ascent;
-		draw_outlined(cfont, cx, cy, req->append, cstroke);
+		draw_outlined(cfont, cx, cy, req->append, cstroke, "white");
 	}
 }
 
@@ -322,6 +333,13 @@ countdown_begin(const struct show_req *req)
 	stroke = req->outline ? stroke_for(pointsize) : 0;
 	fill_alpha = req->alpha >= 0.0 ? req->alpha : 1.0;
 	outline_alpha = req->outline_alpha;
+	/* -T uses -F; countdown digits stay white. Badge takes -F. */
+	strlcpy(text_color, "white", sizeof(text_color));
+	if (req->text && req->tcolor[0] != '\0')
+		strlcpy(text_color, req->tcolor, sizeof(text_color));
+	strlcpy(badge_color, "white", sizeof(badge_color));
+	if (req->tcolor[0] != '\0')
+		strlcpy(badge_color, req->tcolor, sizeof(badge_color));
 	if (req->badge[0] != '\0') {
 		char pattern[128];
 		int bps = pointsize * 26 / 100;
@@ -344,9 +362,7 @@ countdown_begin(const struct show_req *req)
 	}
 
 	draw = XftDrawCreate(dpy, win, visual, cmap);
-	if (draw == NULL ||
-	    !XftColorAllocName(dpy, visual, cmap, "white", &fg) ||
-	    !XftColorAllocName(dpy, visual, cmap, "black", &bg)) {
+	if (draw == NULL) {
 		countdown_end();
 		return (-1);
 	}
@@ -400,12 +416,13 @@ countdown_tick(const struct show_req *req, int digit)
 		    req->x_off;
 	}
 	y = (win_h + font->ascent - font->descent) / 2 + req->y_off;
-	draw_outlined(font, x, y, buf, stroke);
+	draw_outlined(font, x, y, buf, stroke, "white");
 
 	/* Badge superscript off the digits' upper right (slot-stable). */
 	if (bfont != NULL) {
 		by = y - font->ascent + bfont->ascent - bfont->ascent / 5;
-		draw_outlined(bfont, bx, by, req->badge, bstroke);
+		draw_outlined(bfont, bx, by, req->badge, bstroke,
+		    badge_color);
 	}
 	draw_caps(req, y);
 	XFlush(dpy);
@@ -429,7 +446,7 @@ text_tick(const struct show_req *req)
 	x = win_w / 2 - stroke / 2 - (int)extents.width / 2 +
 	    (int)extents.x + req->x_off;
 	y = (win_h + font->ascent - font->descent) / 2 + req->y_off;
-	draw_outlined(font, x, y, text_buf, stroke);
+	draw_outlined(font, x, y, text_buf, stroke, text_color);
 
 	if (bfont != NULL) {
 		bstroke = stroke > 0 ?
@@ -437,7 +454,8 @@ text_tick(const struct show_req *req)
 		bx = x - (int)extents.x + (int)extents.width +
 		    stroke * 2 + bstroke + 28;
 		by = y - font->ascent + bfont->ascent - bfont->ascent / 5;
-		draw_outlined(bfont, bx, by, req->badge, bstroke);
+		draw_outlined(bfont, bx, by, req->badge, bstroke,
+		    badge_color);
 	}
 	draw_caps(req, y);
 	XFlush(dpy);
@@ -447,8 +465,6 @@ void
 countdown_end(void)
 {
 	if (draw != NULL) {
-		XftColorFree(dpy, visual, cmap, &fg);
-		XftColorFree(dpy, visual, cmap, &bg);
 		XftDrawDestroy(draw);
 		draw = NULL;
 	}

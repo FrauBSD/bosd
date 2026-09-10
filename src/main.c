@@ -17,9 +17,10 @@ usage(void)
 	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
 	    "       bosd [-Dhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
-	    "            [-b badge] [-G color] [-g percent] [-O opacity] "
-	    "[-P percent] \\\n"
-	    "            [-p text] [-s scale] [-x offset] [-y offset] \\\n"
+	    "            [-b badge] [-F color] [-G color] [-g percent] "
+	    "[-O opacity] \\\n"
+	    "            [-P percent] [-p text] [-s scale] [-x offset] "
+	    "[-y offset] \\\n"
 	    "            { icon | -c countdown | -T text } [hold_seconds]\n"
 	    "       bosd [-Dhv] [-n instance] [-B seconds] [-F color] "
 	    "[-G color] \\\n"
@@ -298,9 +299,10 @@ main(int argc, char **argv)
 		    "bosd: -B, -G, and -P describe the bar; they require -g\n");
 		usage();
 	}
-	if (!tflag && req.tcolor[0] != '\0') {
+	if (req.tcolor[0] != '\0' && !tflag && !Tflag &&
+	    req.badge[0] == '\0') {
 		fprintf(stderr,
-		    "bosd: -F colors the small text; it requires -t\n");
+		    "bosd: -F colors -t/-T text or a -b badge\n");
 		usage();
 	}
 

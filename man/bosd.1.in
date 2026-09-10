@@ -21,6 +21,7 @@
 .Op Fl a Ar text
 .Op Fl B Ar seconds
 .Op Fl b Ar badge
+.Op Fl F Ar color
 .Op Fl G Ar color
 .Op Fl g Ar percent
 .Op Fl O Ar opacity
@@ -144,7 +145,10 @@ Requires
 Draw
 .Ar badge
 as a superscript at the glyph's upper right
-.Pq white with a black outline, about a quarter of the glyph height .
+.Pq about a quarter of the glyph height, black-outlined ;
+fill color is
+.Fl F
+.Pq default white .
 Used for index digits and short labels
 .Pq e.g. a headphone number, Dq All .
 At most 31 characters before decoding; literal whitespace is not
@@ -176,12 +180,15 @@ whatever it displays
 without a daemon the
 invoking process draws it and returns when done.
 Honors
-.Fl b , o , s , x ,
+.Fl b , F , o , s , x ,
 and
 .Fl y :
 the badge sits at the digits' upper right and
 .Fl s
-scales the digits.
+scales the digits;
+.Fl F
+colors the badge
+.Pq not the digits .
 .It Fl D
 Render directly in the invoking process, ignoring any running
 channel daemon, and exit when the hold elapses.
@@ -192,14 +199,27 @@ Run as the display daemon for
 .Ar instance ,
 listening on a per-user datagram socket.
 .It Fl F Ar color
-Fill the small text
-.Pq Fl t
-with
+Fill text and badges with
 .Ar color ,
-a name or #rrggbb
-.Pq default green .
-Requires
-.Fl t .
+a name or #rrggbb.
+On
+.Fl t
+the default is green; on
+.Fl T
+and
+.Fl b
+the default is white.
+Applies to
+.Fl t
+and
+.Fl T
+text, and to
+.Fl b
+when the badge adorns an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T .
 .It Fl G Ar color
 Fill the gauge bar's ticks with
 .Ar color ,
@@ -329,7 +349,7 @@ draws the checkmark
 Literal whitespace is not permitted; embed it as
 .Ql \ex20 .
 Honors
-.Fl A , b , o , O , s , x ,
+.Fl A , b , F , o , O , s , x ,
 and
 .Fl y .
 .It Fl t Ar text
