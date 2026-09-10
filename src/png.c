@@ -103,78 +103,111 @@ scale_rgba(const unsigned char *src, int sw, int sh, int dw, int dh)
 	return (dst);
 }
 
-/* Black halo behind the glyph so it reads on any wallpaper. */
+/*
+ * Black halo behind the glyph so it reads on any wallpaper.
+ *
+ * Dilate the source alpha (max in a disk), then keep only the outer
+ * ring (dilated - src).  Over-composite the glyph -- including its
+ * soft AA fringe -- onto that ring so baked antialiasing lands on the
+ * outline.  No black under the solid body: a translucent -A shows the
+ * desktop through the glyph, not a filled silhouette.
+ */
 static unsigned char *
 add_outline(const unsigned char *src, int w, int h, int stroke,
     int *w_out, int *h_out)
 {
-	unsigned char *mask, *out;
+	unsigned char *dilated, *out;
 	int pad, ow, oh, x, y, dx, dy, rad2;
 
 	pad = stroke + 2;
 	ow = w + pad * 2;
 	oh = h + pad * 2;
 
-	mask = calloc((size_t)w * (size_t)h, 1);
+	dilated = calloc((size_t)ow * (size_t)oh, 1);
 	out = calloc((size_t)ow * (size_t)oh, 4);
-	if (mask == NULL || out == NULL) {
-		free(mask);
+	if (dilated == NULL || out == NULL) {
+		free(dilated);
 		free(out);
 		return (NULL);
 	}
 
 	rad2 = stroke * stroke + stroke;
 
+	/* Soft dilate: each coverage pixel stamps its alpha into the disk. */
 	for (y = 0; y < h; y++) {
 		for (x = 0; x < w; x++) {
-			if (src[((size_t)y * (size_t)w + (size_t)x) * 4 + 3] >=
-			    32)
-				mask[(size_t)y * (size_t)w + (size_t)x] = 1;
-		}
-	}
+			unsigned char a =
+			    src[((size_t)y * (size_t)w + (size_t)x) * 4 + 3];
 
-	for (y = 0; y < h; y++) {
-		for (x = 0; x < w; x++) {
-			if (!mask[(size_t)y * (size_t)w + (size_t)x])
+			if (a == 0)
 				continue;
 			for (dy = -stroke; dy <= stroke; dy++) {
 				for (dx = -stroke; dx <= stroke; dx++) {
+					size_t di;
 					int nx, ny;
-					size_t oi;
 
 					if (dx * dx + dy * dy > rad2)
 						continue;
 					nx = x + dx + pad;
 					ny = y + dy + pad;
-					oi = ((size_t)ny * (size_t)ow +
-					    (size_t)nx) * 4;
-					out[oi + 0] = 0;
-					out[oi + 1] = 0;
-					out[oi + 2] = 0;
-					out[oi + 3] = 255;
+					di = (size_t)ny * (size_t)ow +
+					    (size_t)nx;
+					if (a > dilated[di])
+						dilated[di] = a;
 				}
 			}
 		}
 	}
 
+	/* Outer ring only: black with alpha = dilated - src. */
+	for (y = 0; y < oh; y++) {
+		for (x = 0; x < ow; x++) {
+			size_t oi = ((size_t)y * (size_t)ow + (size_t)x) * 4;
+			unsigned char d = dilated[(size_t)y * (size_t)ow +
+			    (size_t)x];
+			unsigned char sa = 0;
+			int sx = x - pad, sy = y - pad;
+
+			if (sx >= 0 && sy >= 0 && sx < w && sy < h)
+				sa = src[((size_t)sy * (size_t)w +
+				    (size_t)sx) * 4 + 3];
+			if (d > sa) {
+				out[oi + 0] = 0;
+				out[oi + 1] = 0;
+				out[oi + 2] = 0;
+				out[oi + 3] = (unsigned char)(d - sa);
+			}
+		}
+	}
+	free(dilated);
+
+	/* Glyph Over the ring so AA fringes sit on the outline. */
 	for (y = 0; y < h; y++) {
 		for (x = 0; x < w; x++) {
 			size_t si = ((size_t)y * (size_t)w + (size_t)x) * 4;
 			size_t oi = ((size_t)(y + pad) * (size_t)ow +
 			    (size_t)(x + pad)) * 4;
-			unsigned char a;
+			unsigned sa, da, oa;
+			unsigned char *d = out + oi;
+			const unsigned char *s = src + si;
 
-			a = src[si + 3];
-			if (a < 32)
+			sa = s[3];
+			if (sa == 0)
 				continue;
-			out[oi + 0] = src[si + 0];
-			out[oi + 1] = src[si + 1];
-			out[oi + 2] = src[si + 2];
-			out[oi + 3] = a;
+			da = d[3];
+			oa = sa + da * (255 - sa) / 255;
+			if (oa == 0)
+				continue;
+			d[0] = (unsigned char)
+			    ((s[0] * sa + d[0] * da * (255 - sa) / 255) / oa);
+			d[1] = (unsigned char)
+			    ((s[1] * sa + d[1] * da * (255 - sa) / 255) / oa);
+			d[2] = (unsigned char)
+			    ((s[2] * sa + d[2] * da * (255 - sa) / 255) / oa);
+			d[3] = (unsigned char)oa;
 		}
 	}
 
-	free(mask);
 	if (w_out != NULL)
 		*w_out = ow;
 	if (h_out != NULL)
@@ -277,7 +310,7 @@ prep_icon(const char *path, double scale, double alpha, double oalpha,
 		return (NULL);
 	/*
 	 * Build the halo from the file's native coverage first so a low
-	 * or zero -A cannot erase the mask (add_outline wants alpha>=32).
+	 * or zero -A cannot erase the mask (add_outline dilates alpha).
 	 * Then -A multiplies glyph alpha; -O multiplies outline alpha.
 	 * alpha < 0 means leave the file's alpha untouched.
 	 */
