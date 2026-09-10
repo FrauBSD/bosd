@@ -459,6 +459,16 @@ main(int argc, char **argv)
 			req.hold = BOSD_HOLD_MAX;
 	}
 
+	{
+		char path[BOSD_SPEC_MAX];
+
+		if (icon_resolve(req.spec, path, sizeof(path)) != 0) {
+			fprintf(stderr, "bosd: cannot find icon '%s'\n",
+			    req.spec);
+			return (1);
+		}
+	}
+
 	if (!Dflag && daemon_alive() && send_show(&req) == 0)
 		return (0);
 
