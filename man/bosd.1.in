@@ -83,25 +83,35 @@ rapid key repeats never flash.
 The options are as follows:
 .Bl -tag -width "-n instance"
 .It Fl A Ar opacity
-Multiply the PNG glyph's per-pixel alpha by
+Multiply the artwork fill's alpha by
 .Ar opacity
 .Pq 0.0 to 1.0 .
-Without
+On an
+.Ar icon ,
+without
 .Fl A
 the file's baked alpha is left alone
-.Pq e.g. the example BSD glyph at 80%
-and the black outline halo stays fully opaque.
-With
+.Pq e.g. the example BSD glyph at 80% ;
+with
 .Fl A
-the halo is still drawn from the file's native coverage and stays
-fully opaque; only the glyph's alpha is multiplied
+the outline halo is still drawn from the file's native coverage and
+stays at its
+.Fl O
+opacity while only the glyph is multiplied
 .Pq an 80% pixel with Fl A Li 0.5 becomes 40%;
 .Fl A Li 0
 leaves an outline with an invisible glyph .
+On
+.Fl T ,
+.Fl A
+fades the white fill
+.Pq default full without Fl A .
 Requires an
-.Ar icon ;
+.Ar icon
+or
+.Fl T ;
 it does not apply to
-.Fl c , T ,
+.Fl c
 or
 .Fl t .
 .It Fl a Ar text
@@ -271,6 +281,8 @@ opacity changes
 hides the outline while leaving the glyph.
 Requires an
 .Ar icon
+or
+.Fl T
 with outline enabled; conflicts with
 .Fl o .
 .It Fl p Ar text
@@ -317,7 +329,7 @@ draws the checkmark
 Literal whitespace is not permitted; embed it as
 .Ql \ex20 .
 Honors
-.Fl b , o , s , x ,
+.Fl A , b , o , O , s , x ,
 and
 .Fl y .
 .It Fl t Ar text

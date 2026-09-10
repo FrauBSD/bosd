@@ -12,6 +12,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/Xrender.h>
 #include <fontconfig/fontconfig.h>
 
 #include "priv.h"
@@ -21,6 +22,7 @@ static XftDraw	*draw;
 static XftColor	 fg, bg;
 static int	 stroke, cstroke;
 static int	 lock_len, lock_x, lock_bx;
+static double	 fill_alpha = 1.0, outline_alpha = 1.0;
 static char	 text_buf[BOSD_SPEC_MAX];
 
 static void
@@ -119,20 +121,154 @@ open_fit_font(int screen, int w, int h, int *pointsize,
 	return (f);
 }
 
+/*
+ * Fast path: opaque Xft onto the window.  Slow path: stamp opaque
+ * outline and fill onto temp ARGB pixmaps (so multipass strokes do
+ * not pile translucent ink), punch the fill out of the outline so
+ * translucent white is not Over black (that reads as opaque gray),
+ * then PictOpOver each layer once with a solid alpha mask.
+ */
+static void
+blit_layer(Pixmap pix, int iw, int ih, int dx, int dy, double alpha)
+{
+	XRenderPictFormat *fmt;
+	Picture src, dst, mask;
+	XRenderColor mc;
+
+	if (alpha <= 0.0)
+		return;
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return;
+	src = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	fmt = XRenderFindVisualFormat(dpy, visual);
+	dst = XRenderCreatePicture(dpy, win, fmt, 0, NULL);
+	mc.red = mc.green = mc.blue = 0xffff;
+	mc.alpha = (unsigned short)(alpha * 65535.0 + 0.5);
+	mask = XRenderCreateSolidFill(dpy, &mc);
+	XRenderComposite(dpy, PictOpOver, src, mask, dst, 0, 0, 0, 0,
+	    dx, dy, iw, ih);
+	XRenderFreePicture(dpy, mask);
+	XRenderFreePicture(dpy, src);
+	XRenderFreePicture(dpy, dst);
+}
+
+/* dst := dst outside src — clear outline ink under the glyph body. */
+static void
+punch_fill_from_outline(Pixmap opix, Pixmap fpix, int iw, int ih)
+{
+	XRenderPictFormat *fmt;
+	Picture src, dst;
+
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return;
+	src = XRenderCreatePicture(dpy, fpix, fmt, 0, NULL);
+	dst = XRenderCreatePicture(dpy, opix, fmt, 0, NULL);
+	XRenderComposite(dpy, PictOpOutReverse, src, None, dst,
+	    0, 0, 0, 0, 0, 0, iw, ih);
+	XRenderFreePicture(dpy, src);
+	XRenderFreePicture(dpy, dst);
+}
+
+static Pixmap
+stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
+    int fill, int iw, int ih)
+{
+	XftDraw *td;
+	XftColor ink;
+	XRenderPictFormat *fmt;
+	XRenderColor clear;
+	Pixmap pix;
+	Picture tp;
+	int dx, dy;
+
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return (None);
+	pix = XCreatePixmap(dpy, win, iw, ih, 32);
+	tp = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	clear.red = clear.green = clear.blue = clear.alpha = 0;
+	XRenderFillRectangle(dpy, PictOpSrc, tp, &clear, 0, 0, iw, ih);
+	XRenderFreePicture(dpy, tp);
+
+	td = XftDrawCreate(dpy, pix, visual, cmap);
+	if (td == NULL ||
+	    !XftColorAllocName(dpy, visual, cmap,
+	    fill ? "white" : "black", &ink)) {
+		if (td != NULL)
+			XftDrawDestroy(td);
+		XFreePixmap(dpy, pix);
+		return (None);
+	}
+	if (fill) {
+		XftDrawStringUtf8(td, &ink, f, lx, ly,
+		    (const FcChar8 *)text, len);
+	} else {
+		for (dx = -s; dx <= s; dx++) {
+			for (dy = -s; dy <= s; dy++) {
+				if (dx == 0 && dy == 0)
+					continue;
+				XftDrawStringUtf8(td, &ink, f, lx + dx,
+				    ly + dy, (const FcChar8 *)text, len);
+			}
+		}
+	}
+	XftColorFree(dpy, visual, cmap, &ink);
+	XftDrawDestroy(td);
+	return (pix);
+}
+
 static void
 draw_outlined(XftFont *f, int x, int y, const char *text, int s)
 {
-	int dx, dy, len = (int)strlen(text);
+	XGlyphInfo e;
+	Pixmap opix = None, fpix = None;
+	int len, dx, dy, ox, oy, iw, ih, lx, ly;
 
-	for (dx = -s; dx <= s; dx++) {
-		for (dy = -s; dy <= s; dy++) {
-			if (dx == 0 && dy == 0)
-				continue;
-			XftDrawStringUtf8(draw, &bg, f, x + dx, y + dy,
-			    (const FcChar8 *)text, len);
+	len = (int)strlen(text);
+	if (fill_alpha >= 1.0 && outline_alpha >= 1.0) {
+		for (dx = -s; dx <= s; dx++) {
+			for (dy = -s; dy <= s; dy++) {
+				if (dx == 0 && dy == 0)
+					continue;
+				XftDrawStringUtf8(draw, &bg, f, x + dx,
+				    y + dy, (const FcChar8 *)text, len);
+			}
 		}
+		XftDrawStringUtf8(draw, &fg, f, x, y, (const FcChar8 *)text,
+		    len);
+		return;
 	}
-	XftDrawStringUtf8(draw, &fg, f, x, y, (const FcChar8 *)text, len);
+
+	XftTextExtentsUtf8(dpy, f, (const FcChar8 *)text, len, &e);
+	ox = x - (int)e.x - s;
+	oy = y - (int)e.y - s;
+	iw = (int)e.width + 2 * s;
+	ih = (int)e.height + 2 * s;
+	if (iw < 1)
+		iw = 1;
+	if (ih < 1)
+		ih = 1;
+	lx = x - ox;
+	ly = y - oy;
+
+	if (s > 0 && outline_alpha > 0.0)
+		opix = stamp_xft(f, lx, ly, text, len, s, 0, iw, ih);
+	if (fill_alpha > 0.0 || opix != None)
+		fpix = stamp_xft(f, lx, ly, text, len, s, 1, iw, ih);
+	/* Even when -A is 0 we need the fill mask to hollow the halo. */
+	if (opix != None && fpix != None)
+		punch_fill_from_outline(opix, fpix, iw, ih);
+	if (opix != None) {
+		blit_layer(opix, iw, ih, ox, oy, outline_alpha);
+		XFreePixmap(dpy, opix);
+	}
+	if (fpix != None) {
+		if (fill_alpha > 0.0)
+			blit_layer(fpix, iw, ih, ox, oy, fill_alpha);
+		XFreePixmap(dpy, fpix);
+	}
 }
 
 /* Captions above/below the main content; y is its baseline. */
@@ -184,6 +320,8 @@ countdown_begin(const struct show_req *req)
 	if (font == NULL)
 		return (-1);
 	stroke = req->outline ? stroke_for(pointsize) : 0;
+	fill_alpha = req->alpha >= 0.0 ? req->alpha : 1.0;
+	outline_alpha = req->outline_alpha;
 	if (req->badge[0] != '\0') {
 		char pattern[128];
 		int bps = pointsize * 26 / 100;
