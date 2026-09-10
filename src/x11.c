@@ -401,7 +401,8 @@ paint_icon(const struct icon *ic, const struct show_req *req)
 	raise_overlay();
 	XClearWindow(dpy, win);
 	paint_rgba(ic->rgba, ic->w, ic->h);
-	draw_badge(ic, req->badge, req->tcolor);
+	draw_badge(ic, req->badge, req->tcolor,
+	    req->alpha >= 0.0 ? req->alpha : 1.0, req->outline_alpha);
 	if (req->prefix[0] != '\0')
 		draw_caption(req->prefix, caption_px(ic), icon_oy, 0);
 	if (req->append[0] != '\0')

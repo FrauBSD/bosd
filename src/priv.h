@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include <X11/Xlib.h>
+#include <X11/Xft/Xft.h>
 
 #include <bosd.h>
 
@@ -54,8 +55,12 @@ void	 hide_overlay(void);
 void	 x11_cleanup(void);
 
 /* badge.c */
+void	 draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
+		    const char *text, int stroke, const char *fill_color,
+		    double fill_alpha, double outline_alpha);
 void	 draw_badge(const struct icon *, const char *text,
-		    const char *color);
+		    const char *color, double fill_alpha,
+		    double outline_alpha);
 int	 caption_px(const struct icon *);
 int	 caption_gap(void);
 void	 caption_measure(const char *text, int px, int *w, int *h);

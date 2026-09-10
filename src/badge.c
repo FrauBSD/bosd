@@ -1,12 +1,14 @@
 /*
  * Xft text beside the artwork: the superscript badge at the glyph's
- * upper-right, and captions above/below.
+ * upper-right, and captions above/below.  Shared outlined UTF-8
+ * painter (opaque fast path, or punched ARGB layers for -A/-O).
  */
 #include <stdio.h>
 #include <string.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/Xrender.h>
 
 #include "priv.h"
 
@@ -41,36 +43,187 @@ open_face(int screen, int pixelsize, XftFont **slot, int *slot_px)
 	return (font);
 }
 
-/* White fill ringed by a black outline. */
 static void
-outlined_string(XftDraw *draw, XftFont *font, int x, int y,
-    const char *text, int tlen, int stroke, XftColor *fg, XftColor *bg)
+blit_layer(Pixmap pix, int iw, int ih, int dx, int dy, double alpha)
 {
-	int dx, dy;
+	XRenderPictFormat *fmt;
+	Picture src, dst, mask;
+	XRenderColor mc;
 
-	for (dy = -stroke; dy <= stroke; dy++) {
-		for (dx = -stroke; dx <= stroke; dx++) {
-			if (dx == 0 && dy == 0)
-				continue;
-			if (dx * dx + dy * dy > stroke * stroke + stroke)
-				continue;
-			XftDrawStringUtf8(draw, bg, font, x + dx, y + dy,
-			    (FcChar8 *)text, tlen);
+	if (alpha <= 0.0)
+		return;
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return;
+	src = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	fmt = XRenderFindVisualFormat(dpy, visual);
+	dst = XRenderCreatePicture(dpy, win, fmt, 0, NULL);
+	mc.red = mc.green = mc.blue = 0xffff;
+	mc.alpha = (unsigned short)(alpha * 65535.0 + 0.5);
+	mask = XRenderCreateSolidFill(dpy, &mc);
+	XRenderComposite(dpy, PictOpOver, src, mask, dst, 0, 0, 0, 0,
+	    dx, dy, iw, ih);
+	XRenderFreePicture(dpy, mask);
+	XRenderFreePicture(dpy, src);
+	XRenderFreePicture(dpy, dst);
+}
+
+static void
+punch_fill_from_outline(Pixmap opix, Pixmap fpix, int iw, int ih)
+{
+	XRenderPictFormat *fmt;
+	Picture src, dst;
+
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return;
+	src = XRenderCreatePicture(dpy, fpix, fmt, 0, NULL);
+	dst = XRenderCreatePicture(dpy, opix, fmt, 0, NULL);
+	XRenderComposite(dpy, PictOpOutReverse, src, None, dst,
+	    0, 0, 0, 0, 0, 0, iw, ih);
+	XRenderFreePicture(dpy, src);
+	XRenderFreePicture(dpy, dst);
+}
+
+static Pixmap
+stamp_xft(XftFont *f, int lx, int ly, const char *text, int len, int s,
+    const char *color, int iw, int ih)
+{
+	XftDraw *td;
+	XftColor ink;
+	XRenderPictFormat *fmt;
+	XRenderColor clear;
+	Pixmap pix;
+	Picture tp;
+	int dx, dy;
+	int fill = (color != NULL);
+
+	fmt = XRenderFindStandardFormat(dpy, PictStandardARGB32);
+	if (fmt == NULL)
+		return (None);
+	pix = XCreatePixmap(dpy, win, iw, ih, 32);
+	tp = XRenderCreatePicture(dpy, pix, fmt, 0, NULL);
+	clear.red = clear.green = clear.blue = clear.alpha = 0;
+	XRenderFillRectangle(dpy, PictOpSrc, tp, &clear, 0, 0, iw, ih);
+	XRenderFreePicture(dpy, tp);
+
+	td = XftDrawCreate(dpy, pix, visual, cmap);
+	if (td == NULL ||
+	    !XftColorAllocName(dpy, visual, cmap,
+	    fill ? color : "black", &ink)) {
+		if (td != NULL)
+			XftDrawDestroy(td);
+		XFreePixmap(dpy, pix);
+		return (None);
+	}
+	if (fill) {
+		XftDrawStringUtf8(td, &ink, f, lx, ly,
+		    (const FcChar8 *)text, len);
+	} else {
+		for (dx = -s; dx <= s; dx++) {
+			for (dy = -s; dy <= s; dy++) {
+				if (dx == 0 && dy == 0)
+					continue;
+				XftDrawStringUtf8(td, &ink, f, lx + dx,
+				    ly + dy, (const FcChar8 *)text, len);
+			}
 		}
 	}
-	XftDrawStringUtf8(draw, fg, font, x, y, (FcChar8 *)text, tlen);
+	XftColorFree(dpy, visual, cmap, &ink);
+	XftDrawDestroy(td);
+	return (pix);
 }
 
 /*
- * White fill (or caller color) with a black outline (no surrounding
- * disc).  Reads as an index/label; artwork stays centered.
+ * Fast path: opaque Xft.  Slow path: stamp outline/fill, punch, then
+ * PictOpOver each layer once with a solid alpha mask.
  */
 void
-draw_badge(const struct icon *ic, const char *text, const char *color)
+draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
+    const char *text, int stroke, const char *fill_color,
+    double fill_alpha, double outline_alpha)
+{
+	XGlyphInfo e;
+	XftColor fg, bg;
+	XftDraw *own = NULL;
+	Pixmap opix = None, fpix = None;
+	int len, dx, dy, ox, oy, iw, ih, lx, ly;
+
+	if (text == NULL || text[0] == '\0' || font == NULL)
+		return;
+	len = (int)strlen(text);
+	if (fill_color == NULL || fill_color[0] == '\0')
+		fill_color = "white";
+	if (fill_alpha >= 1.0 && outline_alpha >= 1.0) {
+		if (xd == NULL) {
+			own = XftDrawCreate(dpy, win, visual, cmap);
+			xd = own;
+		}
+		if (xd == NULL)
+			return;
+		if (!XftColorAllocName(dpy, visual, cmap, fill_color, &fg) ||
+		    !XftColorAllocName(dpy, visual, cmap, "black", &bg)) {
+			if (own != NULL)
+				XftDrawDestroy(own);
+			return;
+		}
+		for (dx = -stroke; dx <= stroke; dx++) {
+			for (dy = -stroke; dy <= stroke; dy++) {
+				if (dx == 0 && dy == 0)
+					continue;
+				XftDrawStringUtf8(xd, &bg, font, x + dx,
+				    y + dy, (const FcChar8 *)text, len);
+			}
+		}
+		XftDrawStringUtf8(xd, &fg, font, x, y, (const FcChar8 *)text,
+		    len);
+		XftColorFree(dpy, visual, cmap, &fg);
+		XftColorFree(dpy, visual, cmap, &bg);
+		if (own != NULL)
+			XftDrawDestroy(own);
+		return;
+	}
+
+	XftTextExtentsUtf8(dpy, font, (const FcChar8 *)text, len, &e);
+	ox = x - (int)e.x - stroke;
+	oy = y - (int)e.y - stroke;
+	iw = (int)e.width + 2 * stroke;
+	ih = (int)e.height + 2 * stroke;
+	if (iw < 1)
+		iw = 1;
+	if (ih < 1)
+		ih = 1;
+	lx = x - ox;
+	ly = y - oy;
+
+	if (stroke > 0 && outline_alpha > 0.0)
+		opix = stamp_xft(font, lx, ly, text, len, stroke, NULL,
+		    iw, ih);
+	if (fill_alpha > 0.0 || opix != None)
+		fpix = stamp_xft(font, lx, ly, text, len, stroke,
+		    fill_color, iw, ih);
+	if (opix != None && fpix != None)
+		punch_fill_from_outline(opix, fpix, iw, ih);
+	if (opix != None) {
+		blit_layer(opix, iw, ih, ox, oy, outline_alpha);
+		XFreePixmap(dpy, opix);
+	}
+	if (fpix != None) {
+		if (fill_alpha > 0.0)
+			blit_layer(fpix, iw, ih, ox, oy, fill_alpha);
+		XFreePixmap(dpy, fpix);
+	}
+}
+
+/*
+ * Fill (or caller color) with a black outline.  Honors -A/-O like
+ * large text so icon badges match -T badges.
+ */
+void
+draw_badge(const struct icon *ic, const char *text, const char *color,
+    double fill_alpha, double outline_alpha)
 {
 	XftFont *font;
-	XftDraw *draw;
-	XftColor fg, bg;
 	XGlyphInfo ext;
 	int screen, pixelsize, stroke, text_x, text_y;
 	int target_h, tlen;
@@ -109,26 +262,13 @@ draw_badge(const struct icon *ic, const char *text, const char *color)
 	if (text_y + font->descent + 4 > win_h)
 		text_y = win_h - font->descent - 4;
 
-	draw = XftDrawCreate(dpy, win, visual, cmap);
-	if (draw == NULL)
-		return;
-	if (!XftColorAllocName(dpy, visual, cmap, "black", &bg) ||
-	    !XftColorAllocName(dpy, visual, cmap, fill, &fg)) {
-		XftDrawDestroy(draw);
-		return;
-	}
-
 	stroke = pixelsize / 14;
 	if (stroke < 3)
 		stroke = 3;
 	if (stroke > 8)
 		stroke = 8;
-	outlined_string(draw, font, text_x, text_y, text, tlen, stroke,
-	    &fg, &bg);
-
-	XftColorFree(dpy, visual, cmap, &fg);
-	XftColorFree(dpy, visual, cmap, &bg);
-	XftDrawDestroy(draw);
+	draw_outlined_utf8(NULL, font, text_x, text_y, text, stroke, fill,
+	    fill_alpha, outline_alpha);
 }
 
 /* Caption sizing shared by layout (reserve room) and paint. */
@@ -174,8 +314,6 @@ void
 draw_caption(const char *text, int px, int anchor_y, int below)
 {
 	XftFont *font;
-	XftDraw *draw;
-	XftColor fg, bg;
 	XGlyphInfo ext;
 	int tlen, x, y, stroke;
 
@@ -195,23 +333,14 @@ draw_caption(const char *text, int px, int anchor_y, int below)
 	else
 		y = anchor_y - caption_gap() - font->descent;
 
-	draw = XftDrawCreate(dpy, win, visual, cmap);
-	if (draw == NULL)
-		return;
-	if (!XftColorAllocName(dpy, visual, cmap, "black", &bg) ||
-	    !XftColorAllocName(dpy, visual, cmap, "white", &fg)) {
-		XftDrawDestroy(draw);
-		return;
-	}
 	stroke = px / 14;
 	if (stroke < 2)
 		stroke = 2;
 	if (stroke > 6)
 		stroke = 6;
-	outlined_string(draw, font, x, y, text, tlen, stroke, &fg, &bg);
-	XftColorFree(dpy, visual, cmap, &fg);
-	XftColorFree(dpy, visual, cmap, &bg);
-	XftDrawDestroy(draw);
+	/* Captions stay fully opaque; -A/-O target artwork and badges. */
+	draw_outlined_utf8(NULL, font, x, y, text, stroke, "white",
+	    1.0, 1.0);
 }
 
 void

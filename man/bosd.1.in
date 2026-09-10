@@ -103,17 +103,26 @@ opacity while only the glyph is multiplied
 .Fl A Li 0
 leaves an outline with an invisible glyph .
 On
+.Fl c
+or
 .Fl T ,
 .Fl A
-fades the white fill
+fades the fill
 .Pq default full without Fl A .
+A
+.Fl b
+badge on an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T
+takes the same fill opacity.
 Requires an
-.Ar icon
+.Ar icon ,
+.Fl c ,
 or
 .Fl T ;
 it does not apply to
-.Fl c
-or
 .Fl t .
 .It Fl a Ar text
 Caption below the artwork: a smaller outlined line under the
@@ -180,7 +189,7 @@ whatever it displays
 without a daemon the
 invoking process draws it and returns when done.
 Honors
-.Fl b , F , o , s , x ,
+.Fl A , b , F , o , O , s , x ,
 and
 .Fl y :
 the badge sits at the digits' upper right and
@@ -188,7 +197,11 @@ the badge sits at the digits' upper right and
 scales the digits;
 .Fl F
 colors the digits and badge
-.Pq default white .
+.Pq default white ;
+.Fl A
+and
+.Fl O
+fade fill and outline on both.
 .It Fl D
 Render directly in the invoking process, ignoring any running
 channel daemon, and exit when the hold elapses.
@@ -298,12 +311,28 @@ Conflicts with
 Multiply the black outline halo's alpha by
 .Ar opacity
 .Pq 0.0 to 1.0, default 1.0 .
-The halo is still drawn from the file's native coverage; only its
+On an
+.Ar icon
+the halo is still drawn from the file's native coverage; only its
 opacity changes
 .Pq Fl O Li 0
-hides the outline while leaving the glyph.
+hides the outline while leaving the glyph .
+On
+.Fl c
+or
+.Fl T
+it fades the text outline the same way.
+A
+.Fl b
+badge on an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T
+takes the same outline opacity.
 Requires an
-.Ar icon
+.Ar icon ,
+.Fl c ,
 or
 .Fl T
 with outline enabled; conflicts with

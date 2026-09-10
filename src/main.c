@@ -339,13 +339,6 @@ main(int argc, char **argv)
 			    "the large artwork; they do not apply to -t\n");
 			usage();
 		}
-		if (count > 0 && (req.alpha >= 0.0 ||
-		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF)) {
-			fprintf(stderr,
-			    "bosd: -A and -O apply to an icon or -T, "
-			    "not -c\n");
-			usage();
-		}
 		if (tflag || Tflag) {
 			if (argc < 1 || argc > 2)
 				usage();
