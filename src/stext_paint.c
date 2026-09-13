@@ -10,9 +10,9 @@
 
 #include "priv.h"
 
-#define STEXT_XLFD "-misc-fixed-medium-r-normal--24-*-*-*-*-*-*"
-#define STEXT_PX   24	/* base pixel size before -s */
-#define STEXT_OUTL 2	/* base outline thickness before -s */
+#define STEXT_XLFD "-misc-fixed-medium-r-normal--48-*-*-*-*-*-*"
+#define STEXT_PX   48	/* base pixel size before -s */
+#define STEXT_OUTL 4	/* base outline thickness before -s */
 
 static XFontSet	 fset;
 static XftFont	*xfont;
@@ -59,7 +59,10 @@ stext_metrics(const char *face, double scale)
 	if (ol < 1)
 		ol = 1;
 
-	/* Unscaled default: classic misc-fixed XLFD. */
+	/*
+	 * Unscaled default: try classic misc-fixed XLFD at STEXT_PX;
+	 * if no bitmap exists (common past 20px), fall through to Xft.
+	 */
 	if (want[0] == '\0' && scale >= 0.999 && scale <= 1.001) {
 		if (!use_xft && fset != NULL) {
 			outl = STEXT_OUTL;
@@ -70,15 +73,15 @@ stext_metrics(const char *face, double scale)
 		    &def);
 		if (missing != NULL)
 			XFreeStringList(missing);
-		if (fset == NULL)
-			return (-1);
-		ex = XExtentsOfFontSet(fset);
-		ascent = -ex->max_logical_extent.y;
-		if (ascent < 2)
-			ascent = 20;
-		outl = STEXT_OUTL;
-		lineh = ex->max_logical_extent.height + 2 * outl;
-		return (0);
+		if (fset != NULL) {
+			ex = XExtentsOfFontSet(fset);
+			ascent = -ex->max_logical_extent.y;
+			if (ascent < 2)
+				ascent = 20;
+			outl = STEXT_OUTL;
+			lineh = ex->max_logical_extent.height + 2 * outl;
+			return (0);
+		}
 	}
 
 	if (use_xft && xfont != NULL && xpx == px &&

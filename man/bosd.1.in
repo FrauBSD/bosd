@@ -284,7 +284,7 @@ still chooses size and weight for each role
 .Pq bold tabular for Fl c / Fl T ,
 regular for
 .Fl b
-and icon captions, 24px for
+and icon captions, 48px for
 .Fl t .
 Without
 .Fl f
@@ -442,13 +442,13 @@ the size is panel-derived
 renders it twice that size.
 On
 .Fl t
-it multiplies the 24-pixel caption size
+it multiplies the 48-pixel caption size
 .Pq and outline thickness .
 .It Fl T Ar text
 Draw
 .Ar text
-in the countdown's giant outlined style, centered on the panel and
-held like an icon
+in the countdown's giant outlined style at half the digit height,
+centered on the panel and held like an icon
 .Pq e.g. the checkmark confirming a screenshot .
 Replaces
 .Ar icon
@@ -478,7 +478,7 @@ and
 .It Fl t Ar text
 Draw
 .Ar text
-as small caption lines: 24-pixel type
+as small caption lines: 48-pixel type
 .Pq times Fl s ,
 black-outlined, centered near the panel bottom and stacked above
 the gauge bar's band

@@ -174,7 +174,13 @@ countdown_begin(const struct show_req *req)
 	if (layout_fullscreen() != 0)
 		return (-1);
 
-	pointsize = (int)((scr_h / 2) * 85 / 100 * req->scale + 0.5);
+	/*
+	 * Panel-derived size: -c uses half the panel height (times
+	 * 0.85); -T uses a quarter so default large text sits half
+	 * that tall.
+	 */
+	pointsize = (int)((scr_h / (req->text ? 4 : 2)) * 85 / 100 *
+	    req->scale + 0.5);
 	if (pointsize < 16)
 		pointsize = 16;
 	if (req->scale <= 1.0 && pointsize > 612)

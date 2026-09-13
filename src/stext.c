@@ -1,6 +1,6 @@
 /*
  * Small text: caption-sized lines (a screenshot's filename and the
- * like) in 24px type (times -s), black-outlined and filled in a
+ * like) in 48px type (times -s), black-outlined and filled in a
  * caller-given color (default green), centered near the panel bottom
  * with the block sitting above the gauge bar's band so a concurrent
  * -g never overlaps; lines grow downward.

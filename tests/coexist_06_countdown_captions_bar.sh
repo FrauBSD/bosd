@@ -14,4 +14,4 @@ expect "Green gauge tick at ~50% in the bottom band through the count"
 note "Digits tick in the background; ENTER kills and advances"
 
 show_tick -g 50 -B "$( hold_arg )" -p over-count -a under-count \
-    -c 3 "$( countdown_hold_arg )"
+    -c 3 $( countdown_hold_arg )

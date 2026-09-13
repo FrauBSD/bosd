@@ -13,4 +13,4 @@ expect "Green gauge tick at ~55% in the bottom band through the count"
 expect "Bar stays in its band; digits are centered above it"
 note "Digits tick in the background; ENTER kills and advances"
 
-show_tick -g 55 -B "$( hold_arg )" -c 3 "$( countdown_hold_arg )"
+show_tick -g 55 -B "$( hold_arg )" -c 3 $( countdown_hold_arg )

@@ -29,7 +29,7 @@ usage()
 	    "Usage: tests/run [-hp] [-H seconds] [test-name ...]" \
 	    "Options:" \
 	    "	-H seconds	Hold each paint this long (default 2.0);" \
-	    "			also the per-digit hold for -c countdowns" \
+	    "			if given, also the per-digit hold for -c" \
 	    "	-h		Show this help" \
 	    "	-p		Hold -1 in the background; ENTER kills and advances" \
 	    "Environment:" \
@@ -115,15 +115,25 @@ trap on_interrupt INT
 
 if [ "$pflag" ]; then
 	# Stay on screen until ENTER; show() uses hold_arg (-1).
-	# Keep BOSD_TEST_HOLD so -c still honors -H per digit
 	BOSD_TEST_PAUSE=1
 fi
 
-# Children (NN-*.sh) must see hold / pause overrides
-export BOSD_TEST_HOLD BOSD_TEST_DIR BOSD_TEST_PAUSE
+# Explicit -H or BOSD_TEST_HOLD in the environment: countdowns get
+# that as hold_seconds.  Otherwise omit it (bosd default 1s/digit).
+# Do not export a defaulted hold; children would treat it as explicit.
+if [ "${BOSD_TEST_HOLD+set}" ]; then
+	BOSD_TEST_HOLD_SET=1
+	export BOSD_TEST_HOLD BOSD_TEST_HOLD_SET
+fi
+
+# Children (NN-*.sh) must see pause / dir; hold only if explicit above
+export BOSD_TEST_DIR BOSD_TEST_PAUSE
 
 bosd_test_init || exit
-export BOSD BOSD_TEST_ROOT BOSD_TEST_HOLD BOSD_TEST_PAUSE
+export BOSD BOSD_TEST_ROOT BOSD_TEST_PAUSE
+if [ "$BOSD_TEST_HOLD_SET" ]; then
+	export BOSD_TEST_HOLD BOSD_TEST_HOLD_SET
+fi
 
 if [ "$#" -eq 0 ]; then
 	set -- $( list_tests )

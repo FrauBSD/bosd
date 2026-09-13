@@ -49,7 +49,14 @@ bosd_test_init()
 		return 1
 	fi
 
-	BOSD_TEST_HOLD="${BOSD_TEST_HOLD:-2.0}"
+	# Default icon/text hold.  BOSD_TEST_HOLD_SET (from -H / env via
+	# tests/run, or inferred here for a direct script invoke) means
+	# countdown_hold_arg will pass hold_seconds.
+	if [ "${BOSD_TEST_HOLD+set}" ]; then
+		BOSD_TEST_HOLD_SET=1
+	else
+		BOSD_TEST_HOLD=2.0
+	fi
 
 	if [ ! "$__quiet" ]; then
 		printf 'bosd-test: using %s (%s)\n' \
@@ -183,11 +190,16 @@ hold_arg()
 }
 
 #
-# Per-digit hold for -c; honors -H / BOSD_TEST_HOLD (never -1)
+# Per-digit hold for -c only when -H / BOSD_TEST_HOLD was given.
+# Otherwise print nothing so the caller passes no hold_seconds and
+# bosd(1) keeps its 1s-per-digit default.  Never -1 (-c rejects it).
+# Expand unquoted: $( countdown_hold_arg ) drops the word when empty.
 #
 countdown_hold_arg()
 {
-	printf '%s' "$BOSD_TEST_HOLD"
+	if [ "$BOSD_TEST_HOLD_SET" ]; then
+		printf '%s' "$BOSD_TEST_HOLD"
+	fi
 }
 
 #
