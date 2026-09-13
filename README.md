@@ -121,6 +121,16 @@ points or pixels that do not travel. Layout that does not survive
 theatre in shell. Every hotplug sent you back to wardrobe. `fork`,
 `exec`, flash; rapid media chords strobed like a broken bell.
 
+The typeface story was the same debt in a smaller box. Too many OSD
+stacks favored core X bitmap fonts (crisp on one DPI, a museum piece
+on the next), and treated a real scalable face as either an exercise
+left to the reader or a pipedream for "someday." In 2026 that is not
+a nostalgic constraint; it is a refusal. HiDPI panels, mixed heads,
+and in-game mode sets do not forgive a 10x20 glyph that looked fine
+on a CRT. If the engine cannot ask fontconfig for a TrueType (or kin)
+at a size derived from the panel, the operator is back in the
+`xlsfonts` quarry with a chisel.
+
 And when the toolkit finally admitted a PNG, it still asked you to
 smuggle the black outline into the file (a second career for every
 icon under `$PREFIX/share`, or a permanent treaty with whichever
@@ -154,19 +164,21 @@ Greeter, game, ordinary session; WM-agnostic on purpose.
 Geometry belongs to the panel height, not to a magic constant in a
 shell script. Change the mode and the OSD keeps its seat and its
 bearing; fewer pixels when the canvas is smaller, not a different
-costume on the wrong head. Ship a clean PNG: by default bosd grows
-a legibility halo from the coverage at paint time. Prefer none?
-`-o`. Prefer a softer edge? `-O`. Outline is presentation, not cargo
-in the tree. Alpha is first-class on every layer: XRender
-translucency, respect for alphas already in the art, overrides
-(`-A`, `-O`) without a rebuild. Gauge ticks, captions, countdown
-ink, badges: the same contract.
+costume on the wrong head. Text is Xft through fontconfig: scalable
+faces at panel-derived sizes (and `-f` when you want another family),
+not a treasure hunt through bitmap XLFD names. Ship a clean PNG: by
+default bosd grows a legibility halo from the coverage at paint time.
+Prefer none? `-o`. Prefer a softer edge? `-O`. Outline is
+presentation, not cargo in the tree. Alpha is first-class on every
+layer: XRender translucency, respect for alphas already in the art,
+overrides (`-A`, `-O`) without a rebuild. Gauge ticks, captions,
+countdown ink, badges: the same contract.
 
 You still decide what mute means. You still ship your own glyphs.
 Policy stays in the caller (where Unix always said it should). What
 leaves your desk is the second job: the pixel debt, the outline
-gallery, the process-per-keypress tax, the apology after the last
-mode set.
+gallery, the bitmap-font quarry, the process-per-keypress tax, the
+apology after the last mode set.
 
 That is the catalog item. Not another way to print green text on a
 shaped window. A way to feel, once, the Friday-in-game volume
@@ -179,6 +191,9 @@ in that `$DISPLAY` again).
   green TV/VCR look); absolute layout is your problem. `bosd`
   composites true-color PNG art with real alpha via XRender and
   sizes from the panel.
+- Bitmap-era OSD text (core X fonts, XLFD archaeology) leaves
+  high-resolution type as homework. `bosd` uses Xft and fontconfig
+  for scalable faces at panel-derived sizes; `-f` selects the family.
 - Spawn-per-event OSDs strobe under rapid chords and leave stacking
   to chance. `bosd` runs one background daemon per channel with an
   API: discrete zones, independent holds, replace-in-place, no
