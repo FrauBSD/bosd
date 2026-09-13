@@ -6,9 +6,10 @@
  * bosd assigns the bar no meaning: it draws the given percentage in
  * the given color.  Above 100% the fill stays full and "N%" sits just
  * past the bar's right edge.  Alone, -p/-a captions flank that seat
- * in the same tick-sized face; -f selects the family.  An optional
- * previous percent marks short ticks at or above that watermark
- * dimmer; tall ticks are never dimmed.
+ * in the same tick-sized face; -f selects the family and -F the
+ * label color (else the tick color).  An optional previous percent
+ * marks short ticks at or above that watermark dimmer; tall ticks
+ * are never dimmed.
  */
 #include <poll.h>
 #include <signal.h>
@@ -50,21 +51,27 @@ pct_ticks(int pct)
 }
 
 static void
-bar_resolve_colors(const struct show_req *req, unsigned char *fr,
-    unsigned char *fg, unsigned char *fb, unsigned char *dr,
-    unsigned char *dg, unsigned char *db)
+bar_named_rgb(const char *name, unsigned char *r, unsigned char *g,
+    unsigned char *b)
 {
 	XColor col, exact;
 	Colormap cmap = DefaultColormap(dpy, DefaultScreen(dpy));
 
-	*fr = *fg = *fb = 255;
-	if (XAllocNamedColor(dpy, cmap,
-	    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
-	    &col, &exact)) {
-		*fr = (unsigned char)(col.red >> 8);
-		*fg = (unsigned char)(col.green >> 8);
-		*fb = (unsigned char)(col.blue >> 8);
+	*r = *g = *b = 255;
+	if (XAllocNamedColor(dpy, cmap, name, &col, &exact)) {
+		*r = (unsigned char)(col.red >> 8);
+		*g = (unsigned char)(col.green >> 8);
+		*b = (unsigned char)(col.blue >> 8);
 	}
+}
+
+static void
+bar_resolve_colors(const struct show_req *req, unsigned char *fr,
+    unsigned char *fg, unsigned char *fb, unsigned char *dr,
+    unsigned char *dg, unsigned char *db)
+{
+	bar_named_rgb(req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
+	    fr, fg, fb);
 	*dr = *fr / 2;
 	*dg = *fg / 2;
 	*db = *fb / 2;
@@ -101,7 +108,8 @@ bar_measure(const char *s, XGlyphInfo *e)
 /*
  * -p left of the bar (right-justified), overage past the right edge,
  * -a at the overage seat or left-justified just past overage when both.
- * All three share the tick-derived face and -A/-O/-o alphas.
+ * All three share the tick-derived face and -A/-O/-o alphas; fill
+ * color is -F when set on a gauge alone, else the tick color.
  */
 static void
 bar_draw_labels(Picture pic, const struct bar_geom *m, int w,
@@ -181,6 +189,7 @@ bar_show(const struct show_req *req)
 	Pixmap pix;
 	int on, prev_on, bx, x, y, w, alone, need_font;
 	unsigned char fr, fg, fb, fa, dr, dg, db, oa;
+	unsigned char lr, lg, lb;
 	double fill_a, out_a;
 
 	m = bar_geom_get();
@@ -189,9 +198,9 @@ bar_show(const struct show_req *req)
 	/* y_nudge shifts the band (positive down) from the curated seat. */
 	y = scr_y + scr_h - m->lineh - m->voff + m->y_nudge + req->y_off;
 	/*
-	 * -p/-a/-f adorn the bar only when it is alone.  With an icon,
-	 * -c/-T, or -t they belong to that artwork (and -f sizes that
-	 * face, not the overage label).
+	 * -p/-a/-f/-F adorn the bar only when it is alone.  With an
+	 * icon, -c/-T, or -t they belong to that artwork (and -f/-F
+	 * size that face, not the gauge labels).
 	 */
 	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
 	    !req->small;
@@ -208,13 +217,18 @@ bar_show(const struct show_req *req)
 	fa = (unsigned char)(fill_a * 255.0 + 0.5);
 	oa = (unsigned char)(out_a * 255.0 + 0.5);
 	bar_resolve_colors(req, &fr, &fg, &fb, &dr, &dg, &db);
+	lr = fr;
+	lg = fg;
+	lb = fb;
+	if (alone && req->tcolor[0] != '\0')
+		bar_named_rgb(req->tcolor, &lr, &lg, &lb);
 
 	on = pct_ticks(req->gauge);
 	prev_on = req->gauge_prev < 0 ? -1 : pct_ticks(req->gauge_prev);
 	bx = (w - BOSD_BAR_TICKS * m->pitch) / 2;
 	bar_paint_ticks(pic, on, prev_on, bx, fr, fg, fb, fa, dr, dg, db, oa);
 	if (need_font)
-		bar_draw_labels(pic, m, w, pfx, apx, req->gauge, fr, fg, fb,
+		bar_draw_labels(pic, m, w, pfx, apx, req->gauge, lr, lg, lb,
 		    fa, oa);
 
 	raise_mapped(bwin, &bmapped);

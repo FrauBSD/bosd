@@ -55,6 +55,7 @@
 .Op Fl A Ar opacity
 .Op Fl a Ar text
 .Op Fl B Ar seconds
+.Op Fl F Ar color
 .Op Fl f Ar font
 .Op Fl G Ar color
 .Op Fl O Ar opacity
@@ -289,6 +290,11 @@ when the badge adorns an
 .Fl c ,
 or
 .Fl T .
+On a gauge alone it colors
+.Fl a ,
+.Fl p ,
+and overage labels
+.Pq default the Fl G tick color .
 .It Fl f Ar font
 Select the typeface for text shows and badges via a fontconfig
 family
@@ -335,8 +341,8 @@ the classic xosd bar look, drawn by
 itself with no library dependency
 .Pc .
 Above 100% the fill stays full and the percentage is written just
-past the bar's right edge in the same color
-.Pq Fixed face sized to the tick height, or Fl f when set .
+past the bar's right edge
+.Pq Fixed face sized to the tick height, or Fl f when set; color follows Fl F when set, else the tick color .
 With
 .Fl P
 on a warm daemon, short ticks at or above the latched previous
@@ -360,6 +366,7 @@ bosd -b 2 -g 200 -G orange audio-headphones
 Honors
 .Fl A ,
 .Fl a ,
+.Fl F ,
 .Fl f ,
 .Fl O ,
 .Fl o ,
@@ -367,7 +374,7 @@ Honors
 .Fl x ,
 and
 .Fl y
-.Pq Fl a , Fl f , and Fl p only when the bar is shown alone .
+.Pq Fl a , Fl F , Fl f , and Fl p only when the bar is shown alone .
 .Ar percent
 is 0 to 9999.
 .It Fl P Ar percent

@@ -31,9 +31,9 @@ usage(void)
 	    "[hold_seconds]\n"
 	    "       bosd [-CDhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
-	    "            [-f font] [-G color] [-O opacity] [-P percent] "
-	    "[-p text] \\\n"
-	    "            [-x offset] [-y offset] -g percent\n");
+	    "            [-F color] [-f font] [-G color] [-O opacity] "
+	    "[-P percent] \\\n"
+	    "            [-p text] [-x offset] [-y offset] -g percent\n");
 	exit(1);
 }
 
@@ -345,9 +345,10 @@ main(int argc, char **argv)
 		usage();
 	}
 	if (req.tcolor[0] != '\0' && !tflag && !Tflag && count == 0 &&
-	    req.badge[0] == '\0') {
+	    req.badge[0] == '\0' && req.gauge < 0) {
 		fprintf(stderr,
-		    "bosd: -F colors -c/-t/-T text or a -b badge\n");
+		    "bosd: -F colors -c/-t/-T text, a -b badge, or "
+		    "gauge -a/-p/overage labels\n");
 		usage();
 	}
 	if (req.font[0] != '\0' && !tflag && !Tflag && count == 0 &&
