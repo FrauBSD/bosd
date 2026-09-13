@@ -9,6 +9,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/Xrender.h>
 
 #include <bosd.h>
 
@@ -47,18 +48,34 @@ extern int	 win_w, win_h;
 extern int	 icon_ox, icon_oy;
 
 int	 init_display(void);
-Visual	*find_argb_visual(int *depth_out);
 int	 layout_fullscreen(void);
 void	 raise_overlay(void);
 void	 paint_icon(const struct icon *, const struct show_req *);
 void	 hide_overlay(void);
 void	 x11_cleanup(void);
 
-/* badge.c */
+/* osd_chrome.c */
+Visual	*find_argb_visual(int *depth_out);
+void	 net_wm_osd_props(Window);
+void	 shape_clickthrough(Window);
+void	 shape_bounding_rect(Window, int w, int h);
+Window	 argb_osd_window(int x, int y, int w, int h, Visual **vis_out,
+		    Colormap *cmap_inout, int *depth_out,
+		    unsigned event_mask);
+Window	 shaped_window(int x, int y, int w, int h);
+void	 raise_mapped(Window, int *mapped_flag);
+void	 clamp_paint_alphas(const struct show_req *, double *fill,
+		    double *outline);
+void	 xrender_color_premul(unsigned char r, unsigned char g,
+		    unsigned char b, unsigned char a, XRenderColor *out);
+
+/* draw_utf8.c */
 void	 draw_outlined_utf8(XftDraw *xd, XftFont *font, int x, int y,
 		    const char *text, int stroke, const char *fill_color,
 		    double fill_alpha, double outline_alpha);
 void	 draw_set_target(Drawable d, Visual *v, Colormap c); /* 0 = overlay */
+
+/* badge.c */
 void	 draw_badge(const struct icon *, const char *text,
 		    const char *color, double fill_alpha,
 		    double outline_alpha, const char *face);
@@ -78,12 +95,28 @@ struct icon	*icon_lookup(const char *spec, double scale, double alpha,
 void		 icon_cache_clear(void);
 
 /* bar.c */
-Window	 shaped_window(int x, int y, int w, int h);
 int	 bar_show(const struct show_req *);
 void	 bar_hide(void);
 void	 bar_cleanup(void);
 int	 bar_band_height(void);	/* panel-bottom clearance the bar occupies */
 int	 run_bar(const struct show_req *);
+
+/* stext_paint.c */
+void	 stext_close_fonts(void);
+int	 stext_metrics(const char *face, double scale);
+int	 stext_ascent(void);
+int	 stext_lineh(void);
+int	 stext_outl(void);
+int	 stext_use_xft(void);
+XFontSet stext_fset(void);
+XftFont	*stext_xfont(void);
+void	 stext_line_xlfd(Pixmap pix, Pixmap mask, GC pgc, GC mgc,
+		    const char *s, int x, int base, int grow_pass);
+void	 stext_line_xft(XftDraw *xd, const char *s, int x, int base,
+		    XftColor *ink, int grow_pass);
+void	 stext_mask_line_xft(Window twin, Pixmap mask, GC mgc,
+		    const char *s, int x, int base, Visual *vis,
+		    Colormap cm, int ol_override);
 
 /* stext.c */
 int	 stext_show(const struct show_req *);

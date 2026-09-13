@@ -1,0 +1,174 @@
+#!/bin/sh
+#
+# Visual walkthrough of bosd(1)
+#
+# Prints what to look for on the panel, then shows it with bosd -D
+# (in-process paint; does not disturb a warm channel daemon)
+#
+# Usage: tests/run [-hp] [-H seconds] [test-name ...]
+#        tests/run                 # every case (*.sh except lib.sh), A-Z
+#        tests/run -p              # hold -1 in background; ENTER kills
+#        tests/run bar             # every bar_NN_* case
+#        tests/run text            # stext_* and htext_*
+#        tests/run stext           # small -t only
+#        tests/run htext           # huge -T only
+#        BOSD_TEST_HOLD=1.5 tests/run
+#
+# Cases are named feature_NN[_detail].sh (e.g. bar_01.sh, bar_02_alpha.sh)
+# so each feature groups together, runs in NN order, and a new bar_08_*
+# can be added without renumbering stext_* / htext_* / ...
+# "text" matches both stext_* and htext_*; "stext" / "htext" are exact groups
+#
+
+BOSD_TEST_DIR=$( cd "${0%/*}" && pwd ) || exit
+. "$BOSD_TEST_DIR/lib.sh" || exit
+
+usage()
+{
+	printf '%s\n' \
+	    "Usage: tests/run [-hp] [-H seconds] [test-name ...]" \
+	    "Options:" \
+	    "	-H seconds	Hold each paint this long (default 2.0);" \
+	    "			also the per-digit hold for -c countdowns" \
+	    "	-h		Show this help" \
+	    "	-p		Hold -1 in the background; ENTER kills and advances" \
+	    "Environment:" \
+	    "	BOSD_TEST_HOLD		Same as -H" \
+	    "	DISPLAY			Required (X11)"
+	exit ${1:-0}
+}
+
+#
+# FUNCTIONS
+#
+
+list_tests()
+{
+	local __f __base
+
+	for __f in "$BOSD_TEST_DIR"/*.sh; do
+		[ -f "$__f" ] || continue
+		__base="${__f##*/}"
+		case "$__base" in
+		lib.sh) continue ;;
+		esac
+		printf '%s\n' "$__f"
+	done
+}
+
+match_tests()
+{
+	local __want="$1" __f __base __hit
+
+	for __f in $( list_tests ); do
+		__base="${__f##*/}"
+		__base="${__base%.sh}"
+		__hit=
+		case "$__base" in
+		*$__want*) __hit=1 ;;
+		esac
+		[ "$__hit" ] || continue
+		printf '%s\n' "$__f"
+	done
+}
+
+run_one()
+{
+	local __path="$1" __name
+	local __rc=0
+
+	__name="${__path##*/}"
+	__name="${__name%.sh}"
+	printf '\n######## %s ########\n' "$__name"
+	# Each case is a standalone script (re-inits from lib.sh)
+	sh "$__path" || __rc=$?
+	if [ "$__rc" -ne 0 ]; then
+		printf 'FAIL: %s (exit %s)\n' "$__name" "$__rc" >&2
+		return "$__rc"
+	fi
+	printf 'PASS: %s\n' "$__name"
+	return 0
+}
+
+on_interrupt()
+{
+	printf '\nbosd-test: interrupted\n' >&2
+	exit 130
+}
+
+#
+# MAIN
+#
+
+pflag=
+while getopts H:hp flag; do
+	case "$flag" in
+	H) BOSD_TEST_HOLD="$OPTARG" ;;
+	h) usage 0 ;;
+	p) pflag=1 ;;
+	*) usage 1 ;;
+	esac
+done
+shift $(( $OPTIND - 1 )) # getopt flags
+
+trap on_interrupt INT
+
+if [ "$pflag" ]; then
+	# Stay on screen until ENTER; show() uses hold_arg (-1).
+	# Keep BOSD_TEST_HOLD so -c still honors -H per digit
+	BOSD_TEST_PAUSE=1
+fi
+
+# Children (NN-*.sh) must see hold / pause overrides
+export BOSD_TEST_HOLD BOSD_TEST_DIR BOSD_TEST_PAUSE
+
+bosd_test_init || exit
+export BOSD BOSD_TEST_ROOT BOSD_TEST_HOLD BOSD_TEST_PAUSE
+
+if [ "$#" -eq 0 ]; then
+	set -- $( list_tests )
+else
+	__selected=
+	for __pat in "$@"; do
+		__matches=$( match_tests "$__pat" )
+		if [ ! "$__matches" ]; then
+			printf 'bosd-test: no test matches "%s"\n' \
+			    "$__pat" >&2
+			exit 1
+		fi
+		__selected="$__selected $__matches"
+	done
+	# Dedup while preserving order
+	set --
+	for __f in $__selected; do
+		__seen=
+		for __s in "$@"; do
+			[ "$__s" = "$__f" ] && __seen=1 && break
+		done
+		[ "$__seen" ] && continue
+		set -- "$@" "$__f"
+	done
+fi
+
+if [ "$#" -eq 0 ]; then
+	printf 'bosd-test: no tests found under %s\n' "$BOSD_TEST_DIR" >&2
+	exit 1
+fi
+
+printf 'bosd-test: %s case(s) queued\n' "$#"
+note "Watch the primary panel; each case prints EXPECT then paints"
+note "A compositor (e.g. picom) is needed to see translucency"
+if [ "$pflag" ]; then
+	note "Pause mode: hold -1 in background; ENTER kills and advances"
+fi
+
+__failed=0
+__ran=0
+for __t in "$@"; do
+	__ran=$(( $__ran + 1 ))
+	run_one "$__t" || __failed=$(( $__failed + 1 ))
+done
+
+printf '\n######## summary ########\n'
+printf 'bosd-test: ran %s, failed %s\n' "$__ran" "$__failed"
+[ "$__failed" -eq 0 ]

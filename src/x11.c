@@ -6,12 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/extensions/Xrender.h>
-#include <X11/extensions/shape.h>
 
 #include "priv.h"
 
@@ -112,76 +110,22 @@ refresh_screen_geom(void)
 		icon_pad = 24;
 }
 
-Visual *
-find_argb_visual(int *depth_out)
-{
-	XVisualInfo template, *vi;
-	int n;
-
-	template.screen = DefaultScreen(dpy);
-	template.depth = 32;
-	template.class = TrueColor;
-	vi = XGetVisualInfo(dpy, VisualScreenMask | VisualDepthMask |
-	    VisualClassMask, &template, &n);
-	if (vi == NULL)
-		return (NULL);
-	*depth_out = vi->depth;
-	return (vi[0].visual);
-}
 
 /* Click-through: empty input shape, bounding shape = window rect. */
 static void
 apply_shape(void)
 {
-	XRectangle rect;
-	int se, serr;
-
-	if (!XShapeQueryExtension(dpy, &se, &serr))
-		return;
-	XShapeCombineRectangles(dpy, win, ShapeInput, 0, 0, NULL, 0,
-	    ShapeSet, Unsorted);
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = (unsigned short)win_w;
-	rect.height = (unsigned short)win_h;
-	XShapeCombineRectangles(dpy, win, ShapeBounding, 0, 0, &rect, 1,
-	    ShapeSet, Unsorted);
+	shape_clickthrough(win);
+	shape_bounding_rect(win, win_w, win_h);
 }
 
 static int
 create_window(int x, int y)
 {
-	XSetWindowAttributes wa;
-	Atom net_wm_state, states[3];
-	int screen;
-
-	visual = find_argb_visual(&scr_depth);
-	if (visual == NULL)
-		return (-1);
-	screen = DefaultScreen(dpy);
-	cmap = XCreateColormap(dpy, RootWindow(dpy, screen), visual,
-	    AllocNone);
-	wa.colormap = cmap;
-	wa.border_pixel = 0;
-	wa.background_pixel = 0;
-	wa.override_redirect = True;
-	wa.event_mask = ExposureMask;
-
-	win = XCreateWindow(dpy, RootWindow(dpy, screen), x, y, win_w, win_h,
-	    0, scr_depth, InputOutput, visual,
-	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect |
-	    CWEventMask, &wa);
+	win = argb_osd_window(x, y, win_w, win_h, &visual, &cmap,
+	    &scr_depth, ExposureMask);
 	if (win == 0)
 		return (-1);
-
-	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
-	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
-	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	XChangeProperty(dpy, win, net_wm_state, XA_ATOM, 32, PropModeReplace,
-	    (unsigned char *)states, 3);
-
-	apply_shape();
 	gc = XCreateGC(dpy, win, 0, NULL);
 	mapped = 0;
 	return (0);
@@ -378,13 +322,7 @@ paint_rgba(const unsigned char *rgba, int iw, int ih)
 void
 raise_overlay(void)
 {
-	if (!mapped) {
-		XMapRaised(dpy, win);
-		mapped = 1;
-		XSync(dpy, False);
-	} else {
-		XRaiseWindow(dpy, win);
-	}
+	raise_mapped(win, &mapped);
 }
 
 void

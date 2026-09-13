@@ -184,8 +184,7 @@ countdown_begin(const struct show_req *req)
 	if (font == NULL)
 		return (-1);
 	stroke = req->outline ? stroke_for(pointsize) : 0;
-	fill_alpha = req->alpha >= 0.0 ? req->alpha : 1.0;
-	outline_alpha = req->outline_alpha;
+	clamp_paint_alphas(req, &fill_alpha, &outline_alpha);
 	/* -c/-T and -b take -F; default white. */
 	strlcpy(text_color, "white", sizeof(text_color));
 	if (req->tcolor[0] != '\0')

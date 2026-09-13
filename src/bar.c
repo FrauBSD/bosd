@@ -24,11 +24,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrender.h>
-#include <X11/extensions/shape.h>
 
 #include "priv.h"
 
@@ -84,80 +82,15 @@ bar_band_height(void)
 	return (BAR_VOFF + lineh);
 }
 
-/* Borderless click-through window whose shape the caller sets. */
-Window
-shaped_window(int x, int y, int w, int h)
-{
-	XSetWindowAttributes wa;
-	Atom net_wm_state, states[3];
-	Window swin;
-	int screen = DefaultScreen(dpy);
-
-	wa.override_redirect = True;
-	wa.background_pixel = BlackPixel(dpy, screen);
-	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
-	    (unsigned)w, (unsigned)h, 0, CopyFromParent, InputOutput,
-	    CopyFromParent, CWOverrideRedirect | CWBackPixel, &wa);
-	if (swin == 0)
-		return (0);
-	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
-	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
-	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
-	    PropModeReplace, (unsigned char *)states, 3);
-	/* Click-through. */
-	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
-	    ShapeSet, Unsorted);
-	return (swin);
-}
-
 /* ARGB click-through window for translucent ticks. */
 static Window
 bar_window(int x, int y, int w, int h)
 {
-	XSetWindowAttributes wa;
-	Atom net_wm_state, states[3];
 	Window swin;
-	int screen = DefaultScreen(dpy);
 
-	bvisual = find_argb_visual(&bdepth);
-	if (bvisual == NULL)
-		return (0);
-	if (bcmap != None)
-		XFreeColormap(dpy, bcmap);
-	bcmap = XCreateColormap(dpy, RootWindow(dpy, screen), bvisual,
-	    AllocNone);
-	wa.colormap = bcmap;
-	wa.border_pixel = 0;
-	wa.background_pixel = 0;
-	wa.override_redirect = True;
-	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
-	    (unsigned)w, (unsigned)h, 0, bdepth, InputOutput, bvisual,
-	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect,
-	    &wa);
-	if (swin == 0)
-		return (0);
-	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
-	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
-	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
-	    PropModeReplace, (unsigned char *)states, 3);
-	XStoreName(dpy, swin, "bosd");
-	/* Click-through; bounding is the full window (alpha does the rest). */
-	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
-	    ShapeSet, Unsorted);
-	{
-		XRectangle rect;
-
-		rect.x = 0;
-		rect.y = 0;
-		rect.width = (unsigned short)w;
-		rect.height = (unsigned short)h;
-		XShapeCombineRectangles(dpy, swin, ShapeBounding, 0, 0,
-		    &rect, 1, ShapeSet, Unsorted);
-	}
+	swin = argb_osd_window(x, y, w, h, &bvisual, &bcmap, &bdepth, 0);
+	if (swin != 0)
+		XStoreName(dpy, swin, "bosd");
 	return (swin);
 }
 
@@ -170,16 +103,7 @@ fill_rect_pic(Picture pic, int x, int y, int fw, int fh, unsigned char r,
 
 	if (a == 0 || fw <= 0 || fh <= 0)
 		return;
-	/*
-	 * ARGB32 pictures store premultiplied color.  XRenderColor is
-	 * documented as straight, but filling through PictOpSrc on this
-	 * path left full-brightness RGB at low alpha (picom then paints
-	 * an over-bright tick).  Multiply here so -A 0.1 is actually dim.
-	 */
-	c.red = (unsigned short)((r * 257 * (unsigned)a) / 255);
-	c.green = (unsigned short)((g * 257 * (unsigned)a) / 255);
-	c.blue = (unsigned short)((b * 257 * (unsigned)a) / 255);
-	c.alpha = (unsigned short)(a * 257);
+	xrender_color_premul(r, g, b, a, &c);
 	XRenderFillRectangle(dpy, PictOpSrc, pic, &c, x, y, fw, fh);
 }
 
@@ -296,7 +220,6 @@ paint_bar(Picture src_pic, Pixmap pix, int w, int h)
 	XRenderPictFormat *fmt;
 	Picture dst;
 	XRenderColor clear;
-	XRectangle rect;
 
 	fmt = XRenderFindVisualFormat(dpy, bvisual);
 	if (fmt == NULL)
@@ -315,12 +238,7 @@ paint_bar(Picture src_pic, Pixmap pix, int w, int h)
 	bpix = pix;
 	XSetWindowBackgroundPixmap(dpy, bwin, bpix);
 
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = (unsigned short)w;
-	rect.height = (unsigned short)h;
-	XShapeCombineRectangles(dpy, bwin, ShapeBounding, 0, 0, &rect, 1,
-	    ShapeSet, Unsorted);
+	shape_bounding_rect(bwin, w, h);
 	XFlush(dpy);
 	return (0);
 }
@@ -348,7 +266,7 @@ bar_show(const struct show_req *req)
 	int screen = DefaultScreen(dpy);
 	int on, prev_on, bx, x, y, w;
 	unsigned char fr, fg, fb, fa, dr, dg, db, oa;
-	double fill_a;
+	double fill_a, out_a;
 
 	if (bar_metrics() != 0)
 		return (-1);
@@ -367,22 +285,9 @@ bar_show(const struct show_req *req)
 	clear.red = clear.green = clear.blue = clear.alpha = 0;
 	XRenderFillRectangle(dpy, PictOpSrc, pic, &clear, 0, 0, w, lineh);
 
-	fill_a = req->alpha >= 0.0 ? req->alpha : 1.0;
-	if (fill_a < BOSD_ALPHA_MIN)
-		fill_a = BOSD_ALPHA_MIN;
-	if (fill_a > BOSD_ALPHA_MAX)
-		fill_a = BOSD_ALPHA_MAX;
+	clamp_paint_alphas(req, &fill_a, &out_a);
 	fa = (unsigned char)(fill_a * 255.0 + 0.5);
-	if (req->outline) {
-		double out_a = req->outline_alpha;
-
-		if (out_a < BOSD_ALPHA_MIN)
-			out_a = BOSD_ALPHA_MIN;
-		if (out_a > BOSD_ALPHA_MAX)
-			out_a = BOSD_ALPHA_MAX;
-		oa = (unsigned char)(out_a * 255.0 + 0.5);
-	} else
-		oa = 0;
+	oa = (unsigned char)(out_a * 255.0 + 0.5);
 
 	cmap = DefaultColormap(dpy, screen);
 	fr = fg = fb = 255;
@@ -424,12 +329,7 @@ bar_show(const struct show_req *req)
 		stamp_label(pic, w, lineh, label, x, base, fr, fg, fb, fa, 0);
 	}
 
-	if (!bmapped) {
-		XMapRaised(dpy, bwin);
-		bmapped = 1;
-		XSync(dpy, False);
-	} else
-		XRaiseWindow(dpy, bwin);
+	raise_mapped(bwin, &bmapped);
 
 	if (paint_bar(pic, pix, w, lineh) != 0) {
 		XRenderFreePicture(dpy, pic);
@@ -438,7 +338,6 @@ bar_show(const struct show_req *req)
 	}
 	XRenderFreePicture(dpy, pic);
 	/* pix retained as bpix inside paint_bar */
-	XRaiseWindow(dpy, bwin);
 	XSync(dpy, False);
 	return (0);
 }

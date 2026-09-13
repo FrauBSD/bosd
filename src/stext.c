@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xft/Xft.h>
@@ -23,10 +22,7 @@
 
 #include "priv.h"
 
-#define STEXT_XLFD "-misc-fixed-medium-r-normal--24-*-*-*-*-*-*"
-#define STEXT_PX   24	/* base pixel size before -s */
 #define STEXT_GAP  16	/* air between caption bottom and gauge top */
-#define STEXT_OUTL 2	/* base outline thickness before -s */
 #define STEXT_MAXLINES 8
 
 static Window	 twin;
@@ -34,212 +30,18 @@ static Pixmap	 pix, mask;
 static Colormap	 tcmap;
 static Visual	*tvisual;
 static GC	 pgc, mgc;
-static XFontSet	 fset;
-static XftFont	*xfont;
 static XftDraw	*xdraw;
-static char	 xface[BOSD_FONT_MAX];
-static int	 ascent, lineh, outl, xpx;
 static int	 tmapped;
-static int	 use_xft;
 static int	 t_argb;	/* twin is an ARGB window */
 static int	 tdepth;
 
 static void
-stext_close_fonts(void)
+stext_kill_xdraw(void)
 {
-	if (fset != NULL) {
-		XFreeFontSet(dpy, fset);
-		fset = NULL;
-	}
 	if (xdraw != NULL) {
 		XftDrawDestroy(xdraw);
 		xdraw = NULL;
 	}
-	if (xfont != NULL) {
-		XftFontClose(dpy, xfont);
-		xfont = NULL;
-	}
-	xface[0] = '\0';
-	xpx = 0;
-	use_xft = 0;
-}
-
-static int
-stext_metrics(const char *face, double scale)
-{
-	XFontSetExtents *ex;
-	char **missing;
-	int nmissing;
-	char *def;
-	char pattern[BOSD_FONT_MAX + 64];
-	char attrs[64];
-	const char *want = (face != NULL) ? face : "";
-	int px, ol;
-
-	if (scale < BOSD_SCALE_MIN)
-		scale = BOSD_SCALE_MIN;
-	if (scale > BOSD_SCALE_MAX)
-		scale = BOSD_SCALE_MAX;
-	px = (int)(STEXT_PX * scale + 0.5);
-	if (px < 8)
-		px = 8;
-	ol = (int)(STEXT_OUTL * scale + 0.5);
-	if (ol < 1)
-		ol = 1;
-
-	/* Unscaled default: classic misc-fixed XLFD. */
-	if (want[0] == '\0' && scale >= 0.999 && scale <= 1.001) {
-		if (!use_xft && fset != NULL) {
-			outl = STEXT_OUTL;
-			return (0);
-		}
-		stext_close_fonts();
-		fset = XCreateFontSet(dpy, STEXT_XLFD, &missing, &nmissing,
-		    &def);
-		if (missing != NULL)
-			XFreeStringList(missing);
-		if (fset == NULL)
-			return (-1);
-		ex = XExtentsOfFontSet(fset);
-		ascent = -ex->max_logical_extent.y;
-		if (ascent < 2)
-			ascent = 20;
-		outl = STEXT_OUTL;
-		lineh = ex->max_logical_extent.height + 2 * outl;
-		return (0);
-	}
-
-	if (use_xft && xfont != NULL && xpx == px &&
-	    strcmp(xface, want) == 0) {
-		outl = ol;
-		return (0);
-	}
-	stext_close_fonts();
-	snprintf(attrs, sizeof(attrs), "pixelsize=%d:antialias=true", px);
-	font_pattern(pattern, sizeof(pattern), want,
-	    want[0] != '\0' ? "Sans" : "Fixed", attrs);
-	xfont = XftFontOpenName(dpy, DefaultScreen(dpy), pattern);
-	if (xfont == NULL && want[0] == '\0') {
-		font_pattern(pattern, sizeof(pattern), NULL, "Sans", attrs);
-		xfont = XftFontOpenName(dpy, DefaultScreen(dpy), pattern);
-	}
-	if (xfont == NULL)
-		return (-1);
-	strlcpy(xface, want, sizeof(xface));
-	xpx = px;
-	use_xft = 1;
-	ascent = xfont->ascent;
-	if (ascent < 2)
-		ascent = 20;
-	outl = ol;
-	lineh = xfont->ascent + xfont->descent + 2 * outl;
-	return (0);
-}
-
-/* Square outline passes, then one fill pass, into pixmap and mask. */
-static void
-line_pass_core(const char *s, int x, int base, int grow_pass)
-{
-	int len = (int)strlen(s), dx, dy;
-
-	if (grow_pass) {
-		for (dx = -outl; dx <= outl; dx++)
-			for (dy = -outl; dy <= outl; dy++) {
-				if (dx == 0 && dy == 0)
-					continue;
-				XmbDrawString(dpy, pix, fset, pgc, x + dx,
-				    base + dy, s, len);
-				XmbDrawString(dpy, mask, fset, mgc, x + dx,
-				    base + dy, s, len);
-			}
-	} else {
-		XmbDrawString(dpy, pix, fset, pgc, x, base, s, len);
-		XmbDrawString(dpy, mask, fset, mgc, x, base, s, len);
-	}
-}
-
-static void
-line_pass_xft(XftDraw *xd, const char *s, int x, int base, XftColor *ink,
-    int grow_pass)
-{
-	int len = (int)strlen(s), dx, dy;
-
-	if (grow_pass) {
-		for (dx = -outl; dx <= outl; dx++)
-			for (dy = -outl; dy <= outl; dy++) {
-				if (dx == 0 && dy == 0)
-					continue;
-				XftDrawStringUtf8(xd, ink, xfont, x + dx,
-				    base + dy, (const FcChar8 *)s, len);
-			}
-	} else {
-		XftDrawStringUtf8(xd, ink, xfont, x, base,
-		    (const FcChar8 *)s, len);
-	}
-}
-
-/*
- * Xft cannot paint a 1-bit mask directly.  Stamp white outline+fill on a
- * temp pixmap and copy every non-black pixel into the shape mask so the
- * window stays letter-shaped (same idea as the XLFD path).
- */
-static void
-mask_line_xft(const char *s, int x, int base, Visual *vis, Colormap cm)
-{
-	XGlyphInfo e;
-	XftDraw *td;
-	XftColor white;
-	Pixmap tmp;
-	XImage *img;
-	GC tgc;
-	int len, bx, by, bw, bh, ix, iy, depth;
-	unsigned long blk;
-
-	len = (int)strlen(s);
-	XftTextExtentsUtf8(dpy, xfont, (const FcChar8 *)s, len, &e);
-	bx = x - (int)e.x - outl;
-	by = base - (int)e.y - outl;
-	bw = (int)e.width + 2 * outl;
-	bh = (int)e.height + 2 * outl;
-	if (bw < 1)
-		bw = 1;
-	if (bh < 1)
-		bh = 1;
-
-	depth = DefaultDepth(dpy, DefaultScreen(dpy));
-	tmp = XCreatePixmap(dpy, twin, (unsigned)bw, (unsigned)bh, depth);
-	tgc = XCreateGC(dpy, tmp, 0, NULL);
-	blk = BlackPixel(dpy, DefaultScreen(dpy));
-	XSetForeground(dpy, tgc, blk);
-	XFillRectangle(dpy, tmp, tgc, 0, 0, (unsigned)bw, (unsigned)bh);
-	XFreeGC(dpy, tgc);
-
-	td = XftDrawCreate(dpy, tmp, vis, cm);
-	if (td == NULL ||
-	    !XftColorAllocName(dpy, vis, cm, "white", &white)) {
-		if (td != NULL)
-			XftDrawDestroy(td);
-		XFreePixmap(dpy, tmp);
-		return;
-	}
-	line_pass_xft(td, s, x - bx, base - by, &white, 1);
-	line_pass_xft(td, s, x - bx, base - by, &white, 0);
-	XftColorFree(dpy, vis, cm, &white);
-	XftDrawDestroy(td);
-
-	img = XGetImage(dpy, tmp, 0, 0, (unsigned)bw, (unsigned)bh,
-	    AllPlanes, ZPixmap);
-	XFreePixmap(dpy, tmp);
-	if (img == NULL)
-		return;
-	XSetForeground(dpy, mgc, 1);
-	for (iy = 0; iy < bh; iy++) {
-		for (ix = 0; ix < bw; ix++) {
-			if (XGetPixel(img, ix, iy) != blk)
-				XDrawPoint(dpy, mask, mgc, bx + ix, by + iy);
-		}
-	}
-	XDestroyImage(img);
 }
 
 static void
@@ -276,44 +78,11 @@ stext_drop_window(void)
 static Window
 stext_argb_window(int x, int y, int w, int h)
 {
-	XSetWindowAttributes wa;
-	Atom net_wm_state, states[3];
 	Window swin;
-	XRectangle rect;
-	int screen = DefaultScreen(dpy);
 
-	tvisual = find_argb_visual(&tdepth);
-	if (tvisual == NULL)
-		return (0);
-	if (tcmap != None)
-		XFreeColormap(dpy, tcmap);
-	tcmap = XCreateColormap(dpy, RootWindow(dpy, screen), tvisual,
-	    AllocNone);
-	wa.colormap = tcmap;
-	wa.border_pixel = 0;
-	wa.background_pixel = 0;
-	wa.override_redirect = True;
-	swin = XCreateWindow(dpy, RootWindow(dpy, screen), x, y,
-	    (unsigned)w, (unsigned)h, 0, tdepth, InputOutput, tvisual,
-	    CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect,
-	    &wa);
-	if (swin == 0)
-		return (0);
-	net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
-	states[0] = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-	states[1] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
-	states[2] = XInternAtom(dpy, "_NET_WM_STATE_SKIP_PAGER", False);
-	XChangeProperty(dpy, swin, net_wm_state, XA_ATOM, 32,
-	    PropModeReplace, (unsigned char *)states, 3);
-	XStoreName(dpy, swin, "bosd");
-	XShapeCombineRectangles(dpy, swin, ShapeInput, 0, 0, NULL, 0,
-	    ShapeSet, Unsorted);
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = (unsigned short)w;
-	rect.height = (unsigned short)h;
-	XShapeCombineRectangles(dpy, swin, ShapeBounding, 0, 0, &rect, 1,
-	    ShapeSet, Unsorted);
+	swin = argb_osd_window(x, y, w, h, &tvisual, &tcmap, &tdepth, 0);
+	if (swin != 0)
+		XStoreName(dpy, swin, "bosd");
 	return (swin);
 }
 
@@ -324,12 +93,11 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 	XRenderPictFormat *fmt;
 	XRenderColor clear;
 	Picture pic;
-	XRectangle rect;
 	int i, lw, lx, base;
 	int x, y, w, h;
 
 	w = scr_w;
-	h = nl * lineh;
+	h = nl * stext_lineh();
 	x = scr_x + req->x_off;
 	y = scr_y + scr_h - (bar_band_height() + STEXT_GAP + h) +
 	    req->y_off;
@@ -358,32 +126,21 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 	for (i = 0; i < nl; i++) {
 		XGlyphInfo e;
 
-		XftTextExtentsUtf8(dpy, xfont, (const FcChar8 *)lines[i],
+		XftTextExtentsUtf8(dpy, stext_xfont(), (const FcChar8 *)lines[i],
 		    (int)strlen(lines[i]), &e);
 		lw = (int)e.width;
 		lx = (w - lw) / 2;
-		base = i * lineh + ascent + outl;
-		draw_outlined_utf8(NULL, xfont, lx, base, lines[i], stroke,
+		base = i * stext_lineh() + stext_ascent() + stext_outl();
+		draw_outlined_utf8(NULL, stext_xfont(), lx, base, lines[i], stroke,
 		    fill_name, fill_a, out_a);
 	}
 	draw_set_target(0, NULL, None);
 
 	XSetWindowBackgroundPixmap(dpy, twin, pix);
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = (unsigned short)w;
-	rect.height = (unsigned short)h;
-	XShapeCombineRectangles(dpy, twin, ShapeBounding, 0, 0, &rect, 1,
-	    ShapeSet, Unsorted);
+	shape_bounding_rect(twin, w, h);
 
-	if (!tmapped) {
-		XMapRaised(dpy, twin);
-		tmapped = 1;
-		XSync(dpy, False);
-	} else
-		XRaiseWindow(dpy, twin);
+	raise_mapped(twin, &tmapped);
 	XClearWindow(dpy, twin);
-	XRaiseWindow(dpy, twin);
 	XSync(dpy, False);
 	return (0);
 }
@@ -406,16 +163,7 @@ stext_show(const struct show_req *req)
 	Visual *vis;
 	Colormap cm;
 
-	fill_a = req->alpha >= 0.0 ? req->alpha : 1.0;
-	out_a = req->outline ? req->outline_alpha : 0.0;
-	if (fill_a < BOSD_ALPHA_MIN)
-		fill_a = BOSD_ALPHA_MIN;
-	if (fill_a > BOSD_ALPHA_MAX)
-		fill_a = BOSD_ALPHA_MAX;
-	if (out_a < BOSD_ALPHA_MIN)
-		out_a = BOSD_ALPHA_MIN;
-	if (out_a > BOSD_ALPHA_MAX)
-		out_a = BOSD_ALPHA_MAX;
+	clamp_paint_alphas(req, &fill_a, &out_a);
 	/*
 	 * Real translucency needs ARGB.  -o alone stays on the shaped
 	 * path (just skip the outline).  -A / -O take the ARGB+Xft path.
@@ -423,10 +171,12 @@ stext_show(const struct show_req *req)
 	need_argb = (req->alpha >= 0.0 ||
 	    req->outline_alpha != BOSD_OUTLINE_ALPHA_DEF);
 
+	stext_kill_xdraw();
 	if (stext_metrics(req->font, req->scale) != 0)
 		return (-1);
-	if (need_argb && !use_xft) {
+	if (need_argb && !stext_use_xft()) {
 		/* Classic XLFD has no alpha; paint as Xft Fixed instead. */
+		stext_kill_xdraw();
 		if (stext_metrics(
 		    req->font[0] != '\0' ? req->font : "Fixed",
 		    req->scale) != 0)
@@ -445,14 +195,14 @@ stext_show(const struct show_req *req)
 		return (-1);
 
 	fill_name = req->tcolor[0] != '\0' ? req->tcolor : BOSD_STEXT_DEF;
-	stroke = req->outline ? outl : 0;
+	stroke = req->outline ? stext_outl() : 0;
 
 	if (need_argb)
 		return (stext_show_argb(req, lines, nl, fill_name, fill_a,
 		    out_a, stroke));
 
 	w = scr_w;
-	h = nl * lineh;
+	h = nl * stext_lineh();
 	x = scr_x + req->x_off;
 	/*
 	 * Park the whole caption block above the gauge band so a bar
@@ -493,7 +243,7 @@ stext_show(const struct show_req *req)
 	else
 		fill_px = WhitePixel(dpy, screen);
 
-	if (use_xft) {
+	if (stext_use_xft()) {
 		if (xdraw != NULL)
 			XftDrawDestroy(xdraw);
 		xdraw = XftDrawCreate(dpy, pix, vis, cm);
@@ -510,52 +260,46 @@ stext_show(const struct show_req *req)
 		for (i = 0; i < nl; i++) {
 			XGlyphInfo e;
 
-			XftTextExtentsUtf8(dpy, xfont,
+			XftTextExtentsUtf8(dpy, stext_xfont(),
 			    (const FcChar8 *)lines[i],
 			    (int)strlen(lines[i]), &e);
 			lw = (int)e.width;
 			lx = (w - lw) / 2;
-			base = i * lineh + ascent + outl;
+			base = i * stext_lineh() + stext_ascent() + stext_outl();
 			if (stroke > 0) {
-				mask_line_xft(lines[i], lx, base, vis, cm);
-				line_pass_xft(xdraw, lines[i], lx, base,
+				stext_mask_line_xft(twin, mask, mgc,
+				    lines[i], lx, base, vis, cm, -1);
+				stext_line_xft(xdraw, lines[i], lx, base,
 				    &xblack, 1);
 			} else {
 				/* Fill-only mask: reuse white stamp path. */
-				int save = outl;
-
-				outl = 0;
-				mask_line_xft(lines[i], lx, base, vis, cm);
-				outl = save;
+				stext_mask_line_xft(twin, mask, mgc,
+				    lines[i], lx, base, vis, cm, 0);
 			}
-			line_pass_xft(xdraw, lines[i], lx, base, &xink, 0);
+			stext_line_xft(xdraw, lines[i], lx, base, &xink, 0);
 		}
 		XftColorFree(dpy, vis, cm, &xink);
 		XftColorFree(dpy, vis, cm, &xblack);
 	} else {
 		for (i = 0; i < nl; i++) {
-			lw = XmbTextEscapement(fset, lines[i],
+			lw = XmbTextEscapement(stext_fset(), lines[i],
 			    (int)strlen(lines[i]));
 			lx = (w - lw) / 2;
-			base = i * lineh + ascent + outl;
+			base = i * stext_lineh() + stext_ascent() + stext_outl();
 			XSetForeground(dpy, mgc, 1);
 			if (stroke > 0) {
 				XSetForeground(dpy, pgc, black);
-				line_pass_core(lines[i], lx, base, 1);
+				stext_line_xlfd(pix, mask, pgc, mgc, lines[i], lx, base, 1);
 			}
 			XSetForeground(dpy, pgc, fill_px);
-			line_pass_core(lines[i], lx, base, 0);
+			stext_line_xlfd(pix, mask, pgc, mgc, lines[i], lx, base, 0);
 		}
 	}
 
 	XShapeCombineMask(dpy, twin, ShapeBounding, 0, 0, mask, ShapeSet);
 	XSetWindowBackgroundPixmap(dpy, twin, pix);
 	XClearWindow(dpy, twin);
-	if (!tmapped) {
-		XMapRaised(dpy, twin);
-		tmapped = 1;
-	} else
-		XRaiseWindow(dpy, twin);
+	raise_mapped(twin, &tmapped);
 	XSync(dpy, False);
 	return (0);
 }
@@ -575,6 +319,7 @@ stext_cleanup(void)
 {
 	if (dpy == NULL)
 		return;
+	stext_kill_xdraw();
 	stext_close_fonts();
 	if (pgc != None) {
 		XFreeGC(dpy, pgc);

@@ -28,7 +28,8 @@ LIBOBJS=	${LIBSRCS:.c=.o}
 
 PROG=		bosd
 PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
-		src/badge.c src/bar.c src/countdown.c src/stext.c
+		src/osd_chrome.c src/draw_utf8.c src/badge.c \
+		src/bar.c src/countdown.c src/stext_paint.c src/stext.c
 PROGOBJS=	${PROGSRCS:.c=.o}
 MANIN=		man/bosd.1.in
 MAN=		man/bosd.1
@@ -95,4 +96,11 @@ clean:
 		${MAN} examples/bsd.png
 	rm -rf tools/__pycache__ examples/__pycache__
 
-.PHONY: all install clean example
+#
+# Visual walkthrough: prints EXPECT lines, then paints with bosd -D
+# Requires DISPLAY (and a compositor to judge -A/-O)
+#
+test: all
+	./tests/run
+
+.PHONY: all install clean example test

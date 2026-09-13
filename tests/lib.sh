@@ -1,0 +1,210 @@
+#!/bin/sh
+#
+# Shared helpers for the bosd visual test harness
+#
+
+if [ "$BOSD_TEST_LIB_LOADED" ]; then
+	: already sourced
+	return 0 2> /dev/null || exit 0
+fi
+BOSD_TEST_LIB_LOADED=1
+
+#
+# Locate ./bosd (or PATH), require DISPLAY, set hold default
+#
+bosd_test_init()
+{
+	local __bin __quiet=
+
+	[ "$BOSD" ] && [ -x "$BOSD" ] && __quiet=1
+
+	if [ ! "$BOSD_TEST_DIR" ]; then
+		BOSD_TEST_DIR=$( cd "${0%/*}" && pwd ) || return
+	fi
+	BOSD_TEST_ROOT="${BOSD_TEST_DIR%/tests}"
+	case "$BOSD_TEST_DIR" in
+	*/tests) : ok ;;
+	*)
+		BOSD_TEST_ROOT=$( cd "$BOSD_TEST_DIR/.." && pwd ) || return
+		;;
+	esac
+
+	if [ ! "$DISPLAY" ]; then
+		printf '%s\n' \
+		    "bosd-test: DISPLAY is unset (need an X11 session)" >&2
+		return 1
+	fi
+
+	if [ -x "$BOSD_TEST_ROOT/bosd" ]; then
+		BOSD="$BOSD_TEST_ROOT/bosd"
+	elif [ -x "$BOSD" ]; then
+		: keep caller-exported BOSD
+	elif __bin=$( command -v bosd ) && [ -x "$__bin" ]; then
+		BOSD="$__bin"
+	else
+		printf '%s\n' \
+		    "bosd-test: no ./bosd in the tree and none on PATH" >&2
+		printf '%s\n' \
+		    "bosd-test: run 'make' from $BOSD_TEST_ROOT" >&2
+		return 1
+	fi
+
+	BOSD_TEST_HOLD="${BOSD_TEST_HOLD:-2.0}"
+
+	if [ ! "$__quiet" ]; then
+		printf 'bosd-test: using %s (%s)\n' \
+		    "$BOSD" "$( "$BOSD" -v )"
+		printf 'bosd-test: hold=%ss DISPLAY=%s\n' \
+		    "$BOSD_TEST_HOLD" "$DISPLAY"
+		if [ "$BOSD_TEST_PAUSE" ]; then
+			printf 'bosd-test: pause mode (ENTER advances)\n'
+		fi
+	fi
+	return 0
+}
+
+expect()
+{
+	printf 'EXPECT: %s\n' "$*"
+}
+
+note()
+{
+	printf 'NOTE: %s\n' "$*"
+}
+
+test_begin()
+{
+	printf '\n==> %s\n' "$*"
+}
+
+show_stop()
+{
+	#
+	# Tear down the background bosd from show().  kill $! as soon
+	# as ENTER arrives; ignore a race where it already exited
+	#
+	kill $! 2> /dev/null || : already gone
+	wait $! 2> /dev/null || : errors ignored
+}
+
+show_interrupted()
+{
+	show_stop
+	exit 130
+}
+
+pause_for_enter()
+{
+	local __line
+
+	printf 'Press ENTER for next case (Ctrl-C to abort): '
+	if ! read -r __line; then
+		exit 130
+	fi
+}
+
+#
+# Run bosd with -D (in-process, ignore daemon).
+# With BOSD_TEST_PAUSE: hold is -1, paint in the background, wait for
+# ENTER, then kill $!
+#
+show()
+{
+	printf 'RUN:'
+	printf ' %s' "$BOSD" -D "$@"
+	printf '\n'
+	if [ ! "$BOSD_TEST_PAUSE" ]; then
+		"$BOSD" -D "$@"
+		return
+	fi
+	"$BOSD" -D "$@" &
+	trap show_interrupted INT
+	printf 'Press ENTER for next case (Ctrl-C to abort): '
+	if ! read -r _; then
+		show_interrupted
+	fi
+	trap - INT
+	show_stop
+}
+
+#
+# Foreground paint that must run to completion (e.g. -c ticking alone).
+# In pause mode, wait for ENTER after it finishes
+#
+show_live()
+{
+	printf 'RUN:'
+	printf ' %s' "$BOSD" -D "$@"
+	printf '\n'
+	"$BOSD" -D "$@" || return
+	if [ "$BOSD_TEST_PAUSE" ]; then
+		pause_for_enter
+	fi
+}
+
+#
+# Countdown (or other timed sequence) that must tick while ENTER is
+# already offered.  Pause mode: monitor-mode background job + bg, then
+# kill $! on ENTER.  Without pause: run in the foreground to completion
+#
+show_tick()
+{
+	printf 'RUN:'
+	printf ' %s' "$BOSD" -D "$@"
+	printf '\n'
+	if [ ! "$BOSD_TEST_PAUSE" ]; then
+		"$BOSD" -D "$@"
+		return
+	fi
+	set -m
+	"$BOSD" -D "$@" &
+	bg %+ 2> /dev/null || : already running
+	trap show_interrupted INT
+	printf 'Press ENTER for next case (Ctrl-C to abort): '
+	if ! read -r _; then
+		show_interrupted
+	fi
+	trap - INT
+	show_stop
+}
+
+hold_arg()
+{
+	#
+	# Pause mode: indefinite hold so ENTER can kill $!.
+	# Countdown must use countdown_hold_arg (-c rejects -1)
+	#
+	if [ "$BOSD_TEST_PAUSE" ]; then
+		printf '%s' -1
+	else
+		printf '%s' "$BOSD_TEST_HOLD"
+	fi
+}
+
+#
+# Per-digit hold for -c; honors -H / BOSD_TEST_HOLD (never -1)
+#
+countdown_hold_arg()
+{
+	printf '%s' "$BOSD_TEST_HOLD"
+}
+
+#
+# Resolve examples/bsd.png into $1 (build via make example if needed)
+#
+example_png()
+{
+	local __var_to_set="$1" __png
+
+	__png="$BOSD_TEST_ROOT/examples/bsd.png"
+	if [ ! -f "$__png" ]; then
+		note "building $__png"
+		( cd "$BOSD_TEST_ROOT" && make example ) || return
+	fi
+	if [ ! -f "$__png" ]; then
+		printf 'bosd-test: missing %s\n' "$__png" >&2
+		return 1
+	fi
+	eval $__var_to_set=\"\$__png\"
+}
