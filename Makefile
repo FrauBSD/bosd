@@ -9,6 +9,7 @@ MANDIR?=	${SHAREDIR}/man/man1
 MAN3DIR?=	${SHAREDIR}/man/man3
 ICONDIR?=	${SHAREDIR}/bosd
 EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
+TESTDIR?=	${SHAREDIR}/bosd/tests
 PKGCONFIGDIR?=	${LIBDIR}/pkgconfig
 
 CC?=		cc
@@ -71,20 +72,26 @@ bosd.pc: Makefile
 	    'Cflags: -I$${includedir}' \
 	    > bosd.pc
 
-install: all
+install: all example
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
 		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
 		${DESTDIR}${MAN3DIR} ${DESTDIR}${ICONDIR} \
-		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${PKGCONFIGDIR}
+		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${TESTDIR} \
+		${DESTDIR}${PKGCONFIGDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
 	install -m 555 ${SHLIB} ${DESTDIR}${LIBDIR}/${SHLIB}
 	ln -sf ${SHLIB} ${DESTDIR}${LIBDIR}/libbosd.so
 	install -m 444 include/bosd.h ${DESTDIR}${INCLUDEDIR}/bosd.h
-	install -m 444 ${MAN} ${DESTDIR}${MANDIR}/bosd.1
-	install -m 444 ${MAN3} ${DESTDIR}${MAN3DIR}/bosd.3
+	gzip -cn ${MAN} > ${DESTDIR}${MANDIR}/bosd.1.gz
+	gzip -cn ${MAN3} > ${DESTDIR}${MAN3DIR}/bosd.3.gz
+	chmod 444 ${DESTDIR}${MANDIR}/bosd.1.gz \
+		${DESTDIR}${MAN3DIR}/bosd.3.gz
 	install -m 444 bosd.pc ${DESTDIR}${PKGCONFIGDIR}/bosd.pc
+	install -m 444 examples/bsd.png ${DESTDIR}${ICONDIR}/
 	install -m 444 examples/bsd.py tools/glyph.py \
 		${DESTDIR}${EXAMPLEDIR}/
+	install -m 555 tests/run ${DESTDIR}${TESTDIR}/
+	install -m 555 tests/*.sh ${DESTDIR}${TESTDIR}/
 
 example: examples/bsd.png
 

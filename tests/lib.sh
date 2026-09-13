@@ -45,7 +45,7 @@ bosd_test_init()
 		printf '%s\n' \
 		    "bosd-test: no ./bosd in the tree and none on PATH" >&2
 		printf '%s\n' \
-		    "bosd-test: run 'make' from $BOSD_TEST_ROOT" >&2
+		    "bosd-test: build the tree or install bosd(1)" >&2
 		return 1
 	fi
 
@@ -191,20 +191,34 @@ countdown_hold_arg()
 }
 
 #
-# Resolve examples/bsd.png into $1 (build via make example if needed)
+# Icon operand for glyph tests.  Prefer the packaged name "bsd" when
+# share/bosd/bsd.png sits beside tests/ (ICONDIR).  Otherwise build or
+# reuse examples/bsd.png in a source tree
 #
 example_png()
 {
-	local __var_to_set="$1" __png
+	local __var_to_set="$1" __png __py
 
-	__png="$BOSD_TEST_ROOT/examples/bsd.png"
-	if [ ! -f "$__png" ]; then
-		note "building $__png"
-		( cd "$BOSD_TEST_ROOT" && make example ) || return
+	if [ -f "$BOSD_TEST_ROOT/bsd.png" ]; then
+		eval $__var_to_set=\"bsd\"
+		return 0
 	fi
-	if [ ! -f "$__png" ]; then
-		printf 'bosd-test: missing %s\n' "$__png" >&2
-		return 1
+
+	if [ -f "$BOSD_TEST_ROOT/examples/bsd.py" ]; then
+		__py="$BOSD_TEST_ROOT/examples/bsd.py"
+		__png="$BOSD_TEST_ROOT/examples/bsd.png"
+		if [ ! -f "$__png" ]; then
+			note "building $__png"
+			python3 "$__py" "$__png" || return
+		fi
+		if [ ! -f "$__png" ]; then
+			printf 'bosd-test: missing %s\n' "$__png" >&2
+			return 1
+		fi
+		eval $__var_to_set=\"\$__png\"
+		return 0
 	fi
-	eval $__var_to_set=\"\$__png\"
+
+	printf '%s\n' "bosd-test: cannot find bsd glyph (install or make example)" >&2
+	return 1
 }
