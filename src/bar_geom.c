@@ -24,6 +24,7 @@
 static struct bar_geom g;
 static XftFont	*bar_font;
 static int	 font_for_tick;
+static char	 font_face[BOSD_FONT_MAX];
 
 static int
 scale_ref(int ref, int h)
@@ -83,43 +84,55 @@ bar_band_height(void)
 }
 
 static XftFont *
-bar_open_face(int px)
+bar_open_face(int px, const char *face)
 {
 	char pattern[BOSD_FONT_MAX + 64];
 	char attrs[64];
 	XftFont *f;
 	int screen = DefaultScreen(dpy);
+	const char *want = (face != NULL) ? face : "";
 
 	snprintf(attrs, sizeof(attrs), "pixelsize=%d:antialias=true", px);
-	font_pattern(pattern, sizeof(pattern), NULL, BOSD_FIXED_FACE, attrs);
+	font_pattern(pattern, sizeof(pattern), want, BOSD_FIXED_FACE, attrs);
 	f = XftFontOpenName(dpy, screen, pattern);
 	if (f != NULL)
 		return (f);
+	if (want[0] != '\0') {
+		font_pattern(pattern, sizeof(pattern), NULL, BOSD_FIXED_FACE,
+		    attrs);
+		f = XftFontOpenName(dpy, screen, pattern);
+		if (f != NULL)
+			return (f);
+	}
 	font_pattern(pattern, sizeof(pattern), NULL, "Sans", attrs);
 	return (XftFontOpenName(dpy, screen, pattern));
 }
 
 /*
- * Open BOSD_FIXED_FACE so its ascent fits the panel-derived tick
- * height.  Largest pixelsize with ascent <= tick_h wins.
+ * Open a face so its ascent fits the panel-derived tick height.
+ * Largest pixelsize with ascent <= tick_h wins.  Empty face uses
+ * BOSD_FIXED_FACE.
  */
 int
-bar_ensure_font(void)
+bar_ensure_font(const char *face)
 {
 	XftFont *f;
+	const char *want = (face != NULL) ? face : "";
 	int px;
 
 	bar_geom_refresh();
-	if (bar_font != NULL && font_for_tick == g.tick_h)
+	if (bar_font != NULL && font_for_tick == g.tick_h &&
+	    strcmp(font_face, want) == 0)
 		return (0);
 	bar_font_cleanup();
 	for (px = g.tick_h + 12; px >= 8; px--) {
-		f = bar_open_face(px);
+		f = bar_open_face(px, want);
 		if (f == NULL)
 			continue;
 		if (f->ascent <= g.tick_h) {
 			bar_font = f;
 			font_for_tick = g.tick_h;
+			strlcpy(font_face, want, sizeof(font_face));
 			return (0);
 		}
 		XftFontClose(dpy, f);
@@ -141,4 +154,5 @@ bar_font_cleanup(void)
 		bar_font = NULL;
 	}
 	font_for_tick = 0;
+	font_face[0] = '\0';
 }

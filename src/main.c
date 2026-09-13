@@ -29,10 +29,11 @@ usage(void)
 	    "[-P percent] \\\n"
 	    "            [-s scale] [-x offset] [-y offset] -t text "
 	    "[hold_seconds]\n"
-	    "       bosd [-CDhov] [-n instance] [-A opacity] [-B seconds] "
-	    "[-G color] \\\n"
-	    "            [-O opacity] [-P percent] [-x offset] [-y offset] "
-	    "-g percent\n");
+	    "       bosd [-CDhov] [-n instance] [-A opacity] [-a text] "
+	    "[-B seconds] \\\n"
+	    "            [-f font] [-G color] [-O opacity] [-P percent] "
+	    "[-p text] \\\n"
+	    "            [-x offset] [-y offset] -g percent\n");
 	exit(1);
 }
 
@@ -350,24 +351,24 @@ main(int argc, char **argv)
 		usage();
 	}
 	if (req.font[0] != '\0' && !tflag && !Tflag && count == 0 &&
-	    req.badge[0] == '\0') {
+	    req.badge[0] == '\0' && req.gauge < 0) {
 		fprintf(stderr,
-		    "bosd: -f sets the face for -c/-t/-T text or a "
-		    "-b badge\n");
+		    "bosd: -f sets the face for -c/-t/-T text, a "
+		    "-b badge, or gauge -a/-p labels\n");
 		usage();
 	}
 
 	/* Gauge alone: no icon operand, no -c, no -T, no -t. */
 	if (req.gauge >= 0 && count == 0 && !tflag && !Tflag &&
 	    argc == 0) {
-		if (req.badge[0] != '\0' || req.prefix[0] != '\0' ||
-		    req.append[0] != '\0' || req.font[0] != '\0' ||
-		    req.scale != 1.0) {
+		if (req.badge[0] != '\0' || req.scale != 1.0) {
 			fprintf(stderr,
-			    "bosd: -b, -f, -s, -a, -p adorn "
-			    "the artwork, not the bar\n");
+			    "bosd: -b and -s adorn the artwork, not "
+			    "the bar\n");
 			usage();
 		}
+		decode_field(req.prefix, sizeof(req.prefix));
+		decode_field(req.append, sizeof(req.append));
 		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
 		clear_channel_if_asked(&req);

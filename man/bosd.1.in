@@ -53,13 +53,16 @@
 .Op Fl CDhov
 .Op Fl n Ar instance
 .Op Fl A Ar opacity
+.Op Fl a Ar text
 .Op Fl B Ar seconds
+.Op Fl f Ar font
 .Op Fl G Ar color
 .Op Fl O Ar opacity
-.Fl g Ar percent
 .Op Fl P Ar percent
+.Op Fl p Ar text
 .Op Fl x Ar offset
 .Op Fl y Ar offset
+.Fl g Ar percent
 .Sh DESCRIPTION
 .Nm
 is an on-screen display engine: it flashes transient,
@@ -129,7 +132,7 @@ On
 .Fl g ,
 .Fl A
 sets the tick
-.Pq and overage label
+.Pq and gauge label
 fill opacity the same way
 .Pq default full without Fl A .
 On
@@ -153,10 +156,21 @@ Requires an
 or
 .Fl t .
 .It Fl a Ar text
-Caption below the artwork: a smaller outlined line under the
+On an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T ,
+a caption below the artwork: a smaller outlined line under the
 glyph, digits, or text, e.g.
 .Dq airplane mode off
 under the airplane glyph.
+On a gauge alone
+.Pq Fl g with no icon, Fl c , Fl T , or Fl t ,
+the same string is drawn in the overage label's face and size,
+centerline-aligned with the bar: at the overage seat when no
+overage is shown, or left-justified just past the overage text when
+it is.
 Escapes decode as with
 .Fl T ;
 literal whitespace is permitted.
@@ -290,14 +304,16 @@ and icon captions, panel-scaled type for
 Without
 .Fl f
 the built-in defaults remain
-.Pq DejaVu\ Sans for large text and badges; Fixed for Fl t and the gauge overage label .
+.Pq DejaVu\ Sans for large text and badges; Fixed for Fl t and gauge bar labels .
 Applies to
 .Fl c ,
 .Fl t ,
 .Fl T ,
-and
-.Fl b
-.Pq and to Fl a / Fl p captions on an icon when set .
+.Fl b ,
+and to
+.Fl a / Fl p
+captions on an icon or on a gauge alone
+.Pq and to the gauge overage label .
 .It Fl G Ar color
 Fill the gauge bar's ticks with
 .Ar color ,
@@ -319,7 +335,8 @@ the classic xosd bar look, drawn by
 itself with no library dependency
 .Pc .
 Above 100% the fill stays full and the percentage is written just
-past the bar's right edge in the same color.
+past the bar's right edge in the same color
+.Pq Fixed face sized to the tick height, or Fl f when set .
 With
 .Fl P
 on a warm daemon, short ticks at or above the latched previous
@@ -327,7 +344,9 @@ percent use a 50% dimmer shade of the fill; short ticks between
 the current fill and that watermark stay full color
 .Pq the return zone .
 Tall ticks are never dimmed.
-Alone it shows only the bar; alongside an
+Alone it shows only the bar
+.Pq plus optional Fl p / Fl a labels ;
+alongside an
 .Ar icon ,
 .Fl c ,
 .Fl T ,
@@ -340,11 +359,15 @@ bosd -b 2 -g 200 -G orange audio-headphones
 .Pp
 Honors
 .Fl A ,
+.Fl a ,
+.Fl f ,
 .Fl O ,
 .Fl o ,
+.Fl p ,
 .Fl x ,
 and
-.Fl y .
+.Fl y
+.Pq Fl a , Fl f , and Fl p only when the bar is shown alone .
 .Ar percent
 is 0 to 9999.
 .It Fl P Ar percent
@@ -372,7 +395,7 @@ Each channel has its own overlay and socket.
 Skip the black outline normally drawn behind the glyph for
 legibility on any wallpaper, around
 .Fl g
-ticks and the overage label, or around
+ticks and gauge labels, or around
 .Fl t
 caption text.
 Suited to full-color artwork that carries its own contrast, or a
@@ -400,7 +423,7 @@ it fades the text outline the same way.
 On
 .Fl g
 it fades the black tick
-.Pq and overage label
+.Pq and gauge label
 outline the same way.
 On
 .Fl t
@@ -423,13 +446,21 @@ or
 with outline enabled; conflicts with
 .Fl o .
 .It Fl p Ar text
-Caption above the artwork, otherwise as
+On an
+.Ar icon ,
+.Fl c ,
+or
+.Fl T ,
+a caption above the artwork, otherwise as
 .Fl a ,
 e.g.
 .Dq Shutdown in
 over a countdown, with
 .Fl b Li s
 marking seconds.
+On a gauge alone, the same string is drawn in the overage label's
+face and size, centerline-aligned with the bar and right-justified
+just left of the ticks.
 .It Fl s Ar scale
 Multiply the render size by
 .Ar scale
@@ -494,7 +525,7 @@ the look and place of a screenshot's filename caption.
 Without
 .Fl f
 the face is the Xft Fixed family
-.Pq same face the gauge overage label uses ;
+.Pq same face gauge bar labels use without Fl f ;
 .Fl f
 selects another family at the scaled size.
 .Fl A

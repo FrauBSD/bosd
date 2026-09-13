@@ -5,8 +5,10 @@
  *
  * bosd assigns the bar no meaning: it draws the given percentage in
  * the given color.  Above 100% the fill stays full and "N%" sits just
- * past the bar's right edge.  An optional previous percent marks short
- * ticks at or above that watermark dimmer; tall ticks are never dimmed.
+ * past the bar's right edge.  Alone, -p/-a captions flank that seat
+ * in the same tick-sized face; -f selects the family.  An optional
+ * previous percent marks short ticks at or above that watermark
+ * dimmer; tall ticks are never dimmed.
  */
 #include <poll.h>
 #include <signal.h>
@@ -68,29 +70,81 @@ bar_resolve_colors(const struct show_req *req, unsigned char *fr,
 	*db = *fb / 2;
 }
 
+/* Outline (optional) then fill; same alphas as the ticks. */
 static void
-bar_draw_overage(Picture pic, const struct bar_geom *m, int w,
-    int gauge, unsigned char fr, unsigned char fg, unsigned char fb,
+bar_stamp_pair(Picture pic, int w, int lineh, const char *s, int x,
+    int base, unsigned char fr, unsigned char fg, unsigned char fb,
     unsigned char fa, unsigned char oa)
 {
-	XGlyphInfo e;
-	char label[16];
-	int base, len, x;
-
-	snprintf(label, sizeof(label), "%d%%", gauge);
-	len = (int)strlen(label);
-	XftTextExtentsUtf8(dpy, bar_xfont(), (const FcChar8 *)label, len, &e);
-	/*
-	 * Tall ticks span [outl, outl+tick_h).  Place the baseline so
-	 * the label's ink centerline matches the bar's.  XGlyphInfo.y
-	 * is the (positive) rise from baseline to ink top.
-	 */
-	base = m->outl + m->tick_h / 2 + (int)e.y - (int)e.height / 2;
-	x = (w + BOSD_BAR_TICKS * m->pitch) / 2 + m->over_gap + m->text_xoff;
 	if (oa > 0)
-		bar_stamp_label(pic, w, m->lineh, label, x, base, 0, 0, 0,
-		    oa, 1);
-	bar_stamp_label(pic, w, m->lineh, label, x, base, fr, fg, fb, fa, 0);
+		bar_stamp_label(pic, w, lineh, s, x, base, 0, 0, 0, oa, 1);
+	bar_stamp_label(pic, w, lineh, s, x, base, fr, fg, fb, fa, 0);
+}
+
+/*
+ * Baseline so the string's ink centerline matches the tall-tick
+ * centerline.  XGlyphInfo.y is the rise from baseline to ink top.
+ */
+static int
+bar_label_base(const struct bar_geom *m, const XGlyphInfo *e)
+{
+	return (m->outl + m->tick_h / 2 + (int)e->y - (int)e->height / 2);
+}
+
+static void
+bar_measure(const char *s, XGlyphInfo *e)
+{
+	XftTextExtentsUtf8(dpy, bar_xfont(), (const FcChar8 *)s,
+	    (int)strlen(s), e);
+}
+
+/*
+ * -p left of the bar (right-justified), overage past the right edge,
+ * -a at the overage seat or left-justified just past overage when both.
+ * All three share the tick-derived face and -A/-O/-o alphas.
+ */
+static void
+bar_draw_labels(Picture pic, const struct bar_geom *m, int w,
+    const char *pfx, const char *apx, int gauge, unsigned char fr,
+    unsigned char fg, unsigned char fb, unsigned char fa, unsigned char oa)
+{
+	XGlyphInfo e;
+	char over[16];
+	int bx, bar_r, seat, base, x;
+	int have_over, have_pfx, have_apx;
+
+	have_pfx = pfx != NULL && pfx[0] != '\0';
+	have_apx = apx != NULL && apx[0] != '\0';
+	have_over = gauge > 100;
+	if (!have_pfx && !have_apx && !have_over)
+		return;
+
+	bx = (w - BOSD_BAR_TICKS * m->pitch) / 2;
+	bar_r = bx + BOSD_BAR_TICKS * m->pitch;
+	seat = bar_r + m->over_gap + m->text_xoff;
+
+	if (have_pfx) {
+		bar_measure(pfx, &e);
+		base = bar_label_base(m, &e);
+		/* Right edge of the advance lands at the left seat. */
+		x = bx - m->over_gap - m->text_xoff - (int)e.xOff;
+		bar_stamp_pair(pic, w, m->lineh, pfx, x, base, fr, fg, fb,
+		    fa, oa);
+	}
+	if (have_over) {
+		snprintf(over, sizeof(over), "%d%%", gauge);
+		bar_measure(over, &e);
+		base = bar_label_base(m, &e);
+		bar_stamp_pair(pic, w, m->lineh, over, seat, base, fr, fg, fb,
+		    fa, oa);
+		seat += (int)e.xOff + m->over_gap;
+	}
+	if (have_apx) {
+		bar_measure(apx, &e);
+		base = bar_label_base(m, &e);
+		bar_stamp_pair(pic, w, m->lineh, apx, seat, base, fr, fg, fb,
+		    fa, oa);
+	}
 }
 
 static int
@@ -122,19 +176,31 @@ int
 bar_show(const struct show_req *req)
 {
 	const struct bar_geom *m;
+	const char *face, *pfx, *apx;
 	Picture pic;
 	Pixmap pix;
-	int on, prev_on, bx, x, y, w;
+	int on, prev_on, bx, x, y, w, alone, need_font;
 	unsigned char fr, fg, fb, fa, dr, dg, db, oa;
 	double fill_a, out_a;
 
 	m = bar_geom_get();
-	if (req->gauge > 100 && bar_ensure_font() != 0)
-		return (-1);
 	w = scr_w;
 	x = scr_x + req->x_off;
 	/* y_nudge shifts the band (positive down) from the curated seat. */
 	y = scr_y + scr_h - m->lineh - m->voff + m->y_nudge + req->y_off;
+	/*
+	 * -p/-a/-f adorn the bar only when it is alone.  With an icon,
+	 * -c/-T, or -t they belong to that artwork (and -f sizes that
+	 * face, not the overage label).
+	 */
+	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
+	    !req->small;
+	face = alone ? req->font : "";
+	pfx = alone ? req->prefix : "";
+	apx = alone ? req->append : "";
+	need_font = pfx[0] != '\0' || apx[0] != '\0' || req->gauge > 100;
+	if (need_font && bar_ensure_font(face) != 0)
+		return (-1);
 	if (bar_prepare_surface(m, x, y, w, &pix, &pic) != 0)
 		return (-1);
 
@@ -147,8 +213,9 @@ bar_show(const struct show_req *req)
 	prev_on = req->gauge_prev < 0 ? -1 : pct_ticks(req->gauge_prev);
 	bx = (w - BOSD_BAR_TICKS * m->pitch) / 2;
 	bar_paint_ticks(pic, on, prev_on, bx, fr, fg, fb, fa, dr, dg, db, oa);
-	if (req->gauge > 100)
-		bar_draw_overage(pic, m, w, req->gauge, fr, fg, fb, fa, oa);
+	if (need_font)
+		bar_draw_labels(pic, m, w, pfx, apx, req->gauge, fr, fg, fb,
+		    fa, oa);
 
 	raise_mapped(bwin, &bmapped);
 	if (bar_blit_window(bwin, bvisual, &bpix, pic, pix, w, m->lineh)
