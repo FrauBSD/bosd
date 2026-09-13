@@ -1,12 +1,14 @@
 /*
- * Gauge bar: the classic tick-bar OSD.  56 ticks bottom-centered
- * on the panel, 64px up, sized from 52px fixed-font metrics; tall
- * ticks fill to the given percentage, the rest stay short.  By
- * default ticks (and the overage label) carry a black outline; -A
- * sets fill opacity, -O the outline's, and -o skips the outline.
- * bosd assigns the bar no meaning: it draws the given percentage
- * in the given color.  Above 100% the fill stays full and "N%"
- * sits just past the bar's right edge in the same color,
+ * Gauge bar: the classic tick-bar OSD.  56 ticks bottom-centered on
+ * the panel; tall ticks fill to the given percentage, the rest stay
+ * short.  Geometry scales with panel height from curated pixel sizes
+ * at BAR_REF_H (40px ticks, 64px bottom clearance on a 1200-tall
+ * panel); the overage label face is sized to the tick height, not the
+ * other way around.  By default ticks (and the overage label) carry a
+ * black outline; -A sets fill opacity, -O the outline's, and -o skips
+ * the outline.  bosd assigns the bar no meaning: it draws the given
+ * percentage in the given color.  Above 100% the fill stays full and
+ * "N%" sits just past the bar's right edge in the same color,
  * vertically centered on the gauge bar.
  *
  * An optional previous percent (daemon-latched for a bar session)
@@ -26,60 +28,120 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xft/Xft.h>
 #include <X11/extensions/Xrender.h>
 
 #include "priv.h"
 
-#define BAR_FONT   "-misc-fixed-medium-r-normal--52-*-*-*-*-*-*"
-#define BAR_TICKS  56	/* tick count across the bar */
-#define BAR_VOFF   64	/* pixels up from the panel bottom */
-#define BAR_OUTL   2	/* black outline thickness */
-#define OVER_GAP   20	/* label gap past the bar's right edge */
-#define TEXT_XOFF  10	/* label inset within its slot */
+#define BAR_TICKS	56	/* tick count across the bar */
+/* Curated sizes below apply when scr_h == BAR_REF_H; elsewhere scale. */
+#define BAR_REF_H	1200	/* panel height those pixels were tuned for */
+#define BAR_REF_TICK	40	/* tall tick height at BAR_REF_H */
+#define BAR_REF_VOFF	64	/* bottom clearance at BAR_REF_H */
+#define BAR_REF_EXTRA	10	/* lineh pad beyond tick+outline at ref */
+#define BAR_REF_OUTL	2	/* outline thickness at BAR_REF_H */
+#define BAR_REF_OGAP	20	/* overage label gap at ref */
+#define BAR_REF_XOFF	10	/* label inset at ref */
+#define BAR_Y_NUDGE	(-2)	/* raise the band this many px at BAR_REF_H */
 
 static Window	 bwin;
 static Pixmap	 bpix;		/* ARGB backing; survives Expose */
 static Colormap	 bcmap;
 static Visual	*bvisual;
-static XFontSet	 fset;
-static int	 ascent, lineh;	/* -extent.y and drawn line height */
+static XftFont	*bar_font;	/* overage label; fit to tick_h */
 static int	 bdepth;
 static int	 bmapped;
+static int	 tick_h, pitch, lineh, voff, outl, over_gap, text_xoff;
+static int	 y_nudge;
+static int	 font_for_tick;	/* tick_h used to open bar_font */
 
-/* The classic bar's metrics: tick pitch is half the font ascent. */
-static int
-bar_metrics(void)
+/*
+ * Panel-proportional geometry from the primary output's height
+ * (scr_h after refresh_screen_geom; never the X virtual desktop).
+ * At scr_h == BAR_REF_H the curated pixel sizes are unchanged;
+ * other primary heights scale from that baseline.
+ */
+static void
+bar_geom(void)
 {
-	XFontSetExtents *ex;
-	char **missing;
-	int nmissing;
-	char *def;
+	int h = scr_h > 0 ? scr_h : BAR_REF_H;
 
-	if (fset != NULL)
-		return (0);
-	fset = XCreateFontSet(dpy, BAR_FONT, &missing, &nmissing, &def);
-	if (missing != NULL)
-		XFreeStringList(missing);
-	if (fset == NULL)
-		return (-1);
-	ex = XExtentsOfFontSet(fset);
-	ascent = -ex->max_logical_extent.y;
-	if (ascent < 2)
-		ascent = 40;
-	lineh = ex->max_logical_extent.height + 2 * BAR_OUTL;
-	return (0);
+	tick_h = BAR_REF_TICK * h / BAR_REF_H;
+	if (tick_h < 8)
+		tick_h = 8;
+	pitch = tick_h / 2;
+	if (pitch < 1)
+		pitch = 1;
+	outl = BAR_REF_OUTL * h / BAR_REF_H;
+	if (outl < 1)
+		outl = 1;
+	lineh = tick_h + BAR_REF_EXTRA * h / BAR_REF_H + 2 * outl;
+	if (lineh < tick_h + 2 * outl)
+		lineh = tick_h + 2 * outl;
+	voff = BAR_REF_VOFF * h / BAR_REF_H;
+	if (voff < 1)
+		voff = 1;
+	over_gap = BAR_REF_OGAP * h / BAR_REF_H;
+	if (over_gap < 1)
+		over_gap = 1;
+	text_xoff = BAR_REF_XOFF * h / BAR_REF_H;
+	if (text_xoff < 1)
+		text_xoff = 1;
+	y_nudge = BAR_Y_NUDGE * h / BAR_REF_H;
 }
 
 /*
- * How far up from the panel bottom the gauge band reaches (BAR_VOFF
+ * Open BOSD_FIXED_FACE so its ascent fits the panel-derived tick
+ * height.  Largest pixelsize with ascent <= tick_h wins.
+ */
+static int
+bar_ensure_font(void)
+{
+	char pattern[BOSD_FONT_MAX + 64];
+	char attrs[64];
+	XftFont *f;
+	int px, screen;
+
+	bar_geom();
+	if (bar_font != NULL && font_for_tick == tick_h)
+		return (0);
+	if (bar_font != NULL) {
+		XftFontClose(dpy, bar_font);
+		bar_font = NULL;
+	}
+	screen = DefaultScreen(dpy);
+	for (px = tick_h + 12; px >= 8; px--) {
+		snprintf(attrs, sizeof(attrs),
+		    "pixelsize=%d:antialias=true", px);
+		font_pattern(pattern, sizeof(pattern), NULL,
+		    BOSD_FIXED_FACE, attrs);
+		f = XftFontOpenName(dpy, screen, pattern);
+		if (f == NULL) {
+			font_pattern(pattern, sizeof(pattern), NULL, "Sans",
+			    attrs);
+			f = XftFontOpenName(dpy, screen, pattern);
+		}
+		if (f == NULL)
+			continue;
+		if (f->ascent <= tick_h) {
+			bar_font = f;
+			font_for_tick = tick_h;
+			return (0);
+		}
+		XftFontClose(dpy, f);
+	}
+	return (-1);
+}
+
+/*
+ * How far up from the panel bottom the gauge band reaches (voff
  * plus the tick window).  Used so -t captions sit entirely above it.
  */
 int
 bar_band_height(void)
 {
-	if (bar_metrics() != 0)
-		return (BAR_VOFF + 56);
-	return (BAR_VOFF + lineh);
+	bar_geom();
+	return (voff + lineh);
 }
 
 /* ARGB click-through window for translucent ticks. */
@@ -112,19 +174,19 @@ static void
 bar_tick(Picture pic, int i, int bx, int grow, int tall, unsigned char r,
     unsigned char g, unsigned char b, unsigned char a)
 {
-	int x = bx + i * (ascent / 2);
+	int x = bx + i * pitch;
 	int rx, ry, rwi, rhi;
 
 	if (tall) {
 		rx = x - grow;
-		ry = 0 - grow + BAR_OUTL;
-		rwi = (ascent / 2) * 7 / 10 + 2 * grow;
-		rhi = ascent + 2 * grow;
+		ry = 0 - grow + outl;
+		rwi = pitch * 7 / 10 + 2 * grow;
+		rhi = tick_h + 2 * grow;
 	} else {
 		rx = x - grow;
-		ry = ascent / 3 - grow + BAR_OUTL;
-		rwi = (ascent / 2) * 8 / 10 + 2 * grow;
-		rhi = ascent / 3 + 2 * grow;
+		ry = tick_h / 3 - grow + outl;
+		rwi = pitch * 8 / 10 + 2 * grow;
+		rhi = tick_h / 3 + 2 * grow;
 	}
 	fill_rect_pic(pic, rx, ry, rwi, rhi, r, g, b, a);
 }
@@ -143,7 +205,7 @@ bar_paint(Picture pic, int on, int prev_on, int bx, unsigned char fr,
 
 	if (out_a > 0) {
 		for (i = 0; i < BAR_TICKS; i++)
-			bar_tick(pic, i, bx, BAR_OUTL, i < on, 0, 0, 0, out_a);
+			bar_tick(pic, i, bx, outl, i < on, 0, 0, 0, out_a);
 	}
 	for (i = 0; i < on; i++)
 		bar_tick(pic, i, bx, 0, 1, fr, fg, fb, fa);
@@ -156,7 +218,7 @@ bar_paint(Picture pic, int on, int prev_on, int bx, unsigned char fr,
 }
 
 /*
- * Fixed-font label: ink from a scratch pixmap, stamped with
+ * Fixed-face label: ink from a scratch pixmap, stamped with
  * XRenderFillRectangle so alpha stays intact (XPutImage drops it).
  */
 static void
@@ -167,14 +229,19 @@ stamp_label(Picture pic, int rw, int rh, const char *s, int x, int base,
 	Pixmap tmp;
 	GC tgc;
 	XImage *img;
+	XftDraw *td;
+	XftColor ink;
+	Visual *vis;
+	Colormap cm;
 	int screen = DefaultScreen(dpy);
 	int depth = DefaultDepth(dpy, screen);
 	unsigned long bg = WhitePixel(dpy, screen);
-	unsigned long fg = BlackPixel(dpy, screen);
 	int len = (int)strlen(s), dx, dy, xi, yi;
 
-	if (a == 0)
+	if (a == 0 || bar_font == NULL)
 		return;
+	vis = DefaultVisual(dpy, screen);
+	cm = DefaultColormap(dpy, screen);
 	tmp = XCreatePixmap(dpy, RootWindow(dpy, screen), (unsigned)rw,
 	    (unsigned)rh, depth);
 	if (tmp == 0)
@@ -182,21 +249,33 @@ stamp_label(Picture pic, int rw, int rh, const char *s, int x, int base,
 	tgc = XCreateGC(dpy, tmp, 0, NULL);
 	XSetForeground(dpy, tgc, bg);
 	XFillRectangle(dpy, tmp, tgc, 0, 0, (unsigned)rw, (unsigned)rh);
-	XSetForeground(dpy, tgc, fg);
+	XFreeGC(dpy, tgc);
+
+	td = XftDrawCreate(dpy, tmp, vis, cm);
+	if (td == NULL ||
+	    !XftColorAllocName(dpy, vis, cm, "black", &ink)) {
+		if (td != NULL)
+			XftDrawDestroy(td);
+		XFreePixmap(dpy, tmp);
+		return;
+	}
 	if (grow_pass) {
-		for (dx = -BAR_OUTL; dx <= BAR_OUTL; dx++)
-			for (dy = -BAR_OUTL; dy <= BAR_OUTL; dy++) {
+		for (dx = -outl; dx <= outl; dx++)
+			for (dy = -outl; dy <= outl; dy++) {
 				if (dx == 0 && dy == 0)
 					continue;
-				XmbDrawString(dpy, tmp, fset, tgc, x + dx,
-				    base + dy, s, len);
+				XftDrawStringUtf8(td, &ink, bar_font,
+				    x + dx, base + dy,
+				    (const FcChar8 *)s, len);
 			}
 	} else
-		XmbDrawString(dpy, tmp, fset, tgc, x, base, s, len);
+		XftDrawStringUtf8(td, &ink, bar_font, x, base,
+		    (const FcChar8 *)s, len);
+	XftColorFree(dpy, vis, cm, &ink);
+	XftDrawDestroy(td);
 
 	img = XGetImage(dpy, tmp, 0, 0, (unsigned)rw, (unsigned)rh,
 	    AllPlanes, ZPixmap);
-	XFreeGC(dpy, tgc);
 	XFreePixmap(dpy, tmp);
 	if (img == NULL)
 		return;
@@ -268,11 +347,13 @@ bar_show(const struct show_req *req)
 	unsigned char fr, fg, fb, fa, dr, dg, db, oa;
 	double fill_a, out_a;
 
-	if (bar_metrics() != 0)
+	bar_geom();
+	if (req->gauge > 100 && bar_ensure_font() != 0)
 		return (-1);
 	w = scr_w;
 	x = scr_x + req->x_off;
-	y = scr_y + scr_h - lineh - BAR_VOFF + req->y_off;
+	/* y_nudge shifts the band (positive down) from the curated seat. */
+	y = scr_y + scr_h - lineh - voff + y_nudge + req->y_off;
 	if (bwin == 0 && (bwin = bar_window(x, y, w, lineh)) == 0)
 		return (-1);
 	XMoveResizeWindow(dpy, bwin, x, y, (unsigned)w, (unsigned)lineh);
@@ -304,29 +385,31 @@ bar_show(const struct show_req *req)
 
 	on = pct_ticks(req->gauge);
 	prev_on = req->gauge_prev < 0 ? -1 : pct_ticks(req->gauge_prev);
-	bx = (w - BAR_TICKS * (ascent / 2)) / 2;
+	bx = (w - BAR_TICKS * pitch) / 2;
 
 	bar_paint(pic, on, prev_on, bx, fr, fg, fb, fa, dr, dg, db, oa);
 
 	if (req->gauge > 100) {
-		XRectangle ink, logical;
+		XGlyphInfo e;
 		int base, len;
 
 		snprintf(label, sizeof(label), "%d%%", req->gauge);
 		len = (int)strlen(label);
-		XmbTextExtents(fset, label, len, &ink, &logical);
+		XftTextExtentsUtf8(dpy, bar_font, (const FcChar8 *)label,
+		    len, &e);
 		/*
-		 * Tall ticks span [BAR_OUTL, BAR_OUTL+ascent).  Place the
-		 * baseline so the label's ink centerline matches the bar's,
-		 * not the old bottom-aligned baseline (ascent+BAR_OUTL).
+		 * Tall ticks span [outl, outl+tick_h).  Place the baseline
+		 * so the label's ink centerline matches the bar's.
+		 * XGlyphInfo.y is the (positive) rise from baseline to
+		 * ink top.
 		 */
-		base = BAR_OUTL + ascent / 2 - (ink.y + ink.height / 2);
-		x = (w + BAR_TICKS * (ascent / 2)) / 2 + OVER_GAP +
-		    TEXT_XOFF;
+		base = outl + tick_h / 2 + (int)e.y - (int)e.height / 2;
+		x = (w + BAR_TICKS * pitch) / 2 + over_gap + text_xoff;
 		if (oa > 0)
 			stamp_label(pic, w, lineh, label, x, base, 0, 0, 0,
 			    oa, 1);
-		stamp_label(pic, w, lineh, label, x, base, fr, fg, fb, fa, 0);
+		stamp_label(pic, w, lineh, label, x, base, fr, fg, fb, fa,
+		    0);
 	}
 
 	raise_mapped(bwin, &bmapped);
@@ -392,9 +475,10 @@ bar_cleanup(void)
 		bcmap = None;
 	}
 	bvisual = NULL;
-	if (fset != NULL) {
-		XFreeFontSet(dpy, fset);
-		fset = NULL;
+	if (bar_font != NULL) {
+		XftFontClose(dpy, bar_font);
+		bar_font = NULL;
+		font_for_tick = 0;
 	}
 	bmapped = 0;
 }

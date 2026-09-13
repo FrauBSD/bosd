@@ -86,6 +86,9 @@ void	 caption_measure(const char *text, int px, int *w, int *h,
 void	 draw_caption(const char *text, int px, int anchor_y, int below,
 		    const char *face);
 void	 badge_cleanup(void);
+/* Default -t / gauge-label Xft face (same as the historic -A path). */
+#define BOSD_FIXED_FACE	"Fixed"
+
 void	 font_pattern(char *out, size_t outlen, const char *face,
 		    const char *fallback, const char *attrs);
 
@@ -107,11 +110,7 @@ int	 stext_metrics(const char *face, double scale);
 int	 stext_ascent(void);
 int	 stext_lineh(void);
 int	 stext_outl(void);
-int	 stext_use_xft(void);
-XFontSet stext_fset(void);
 XftFont	*stext_xfont(void);
-void	 stext_line_xlfd(Pixmap pix, Pixmap mask, GC pgc, GC mgc,
-		    const char *s, int x, int base, int grow_pass);
 void	 stext_line_xft(XftDraw *xd, const char *s, int x, int base,
 		    XftColor *ink, int grow_pass);
 void	 stext_mask_line_xft(Window twin, Pixmap mask, GC mgc,

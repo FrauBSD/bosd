@@ -4,10 +4,9 @@
  * caller-given color (default green), centered near the panel bottom
  * with the block sitting above the gauge bar's band so a concurrent
  * -g never overlaps; lines grow downward.
- * Default face is the classic misc-fixed XLFD at scale 1; -f and/or
- * -s != 1 switch to Xft.  -A/-O need real alpha so those paints use an
- * ARGB window and Xft (Fixed when the classic XLFD would have applied);
- * -o simply skips the outline on either path.
+ * Default face is Xft BOSD_FIXED_FACE; -f selects another family.
+ * -A/-O need real alpha so those paints use an ARGB window; -o simply
+ * skips the outline.  Face and size do not depend on -A/-O.
  */
 #include <poll.h>
 #include <signal.h>
@@ -148,7 +147,6 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 int
 stext_show(const struct show_req *req)
 {
-	XColor col, exact;
 	XftColor xink, xblack;
 	char text[BOSD_SPEC_MAX];
 	char *lines[STEXT_MAXLINES];
@@ -158,7 +156,6 @@ stext_show(const struct show_req *req)
 	int nl = 0, i, lw, lx, base;
 	int x, y, w, h;
 	int need_argb, stroke;
-	unsigned long fill_px, black;
 	double fill_a, out_a;
 	Visual *vis;
 	Colormap cm;
@@ -166,7 +163,7 @@ stext_show(const struct show_req *req)
 	clamp_paint_alphas(req, &fill_a, &out_a);
 	/*
 	 * Real translucency needs ARGB.  -o alone stays on the shaped
-	 * path (just skip the outline).  -A / -O take the ARGB+Xft path.
+	 * path (just skip the outline).  -A / -O take the ARGB path.
 	 */
 	need_argb = (req->alpha >= 0.0 ||
 	    req->outline_alpha != BOSD_OUTLINE_ALPHA_DEF);
@@ -174,14 +171,6 @@ stext_show(const struct show_req *req)
 	stext_kill_xdraw();
 	if (stext_metrics(req->font, req->scale) != 0)
 		return (-1);
-	if (need_argb && !stext_use_xft()) {
-		/* Classic XLFD has no alpha; paint as Xft Fixed instead. */
-		stext_kill_xdraw();
-		if (stext_metrics(
-		    req->font[0] != '\0' ? req->font : "Fixed",
-		    req->scale) != 0)
-			return (-1);
-	}
 
 	decode_escapes(req->spec, text, sizeof(text));
 	for (p = text; nl < STEXT_MAXLINES && *p != '\0';) {
@@ -237,64 +226,42 @@ stext_show(const struct show_req *req)
 	XSetForeground(dpy, pgc, BlackPixel(dpy, screen));
 	XFillRectangle(dpy, pix, pgc, 0, 0, (unsigned)w, (unsigned)h);
 
-	black = BlackPixel(dpy, screen);
-	if (XAllocNamedColor(dpy, cm, fill_name, &col, &exact))
-		fill_px = col.pixel;
-	else
-		fill_px = WhitePixel(dpy, screen);
-
-	if (stext_use_xft()) {
-		if (xdraw != NULL)
+	if (xdraw != NULL)
+		XftDrawDestroy(xdraw);
+	xdraw = XftDrawCreate(dpy, pix, vis, cm);
+	if (xdraw == NULL)
+		return (-1);
+	if (!XftColorAllocName(dpy, vis, cm, "black", &xblack) ||
+	    !XftColorAllocName(dpy, vis, cm, fill_name, &xink)) {
+		if (xdraw != NULL) {
 			XftDrawDestroy(xdraw);
-		xdraw = XftDrawCreate(dpy, pix, vis, cm);
-		if (xdraw == NULL)
-			return (-1);
-		if (!XftColorAllocName(dpy, vis, cm, "black", &xblack) ||
-		    !XftColorAllocName(dpy, vis, cm, fill_name, &xink)) {
-			if (xdraw != NULL) {
-				XftDrawDestroy(xdraw);
-				xdraw = NULL;
-			}
-			return (-1);
+			xdraw = NULL;
 		}
-		for (i = 0; i < nl; i++) {
-			XGlyphInfo e;
-
-			XftTextExtentsUtf8(dpy, stext_xfont(),
-			    (const FcChar8 *)lines[i],
-			    (int)strlen(lines[i]), &e);
-			lw = (int)e.width;
-			lx = (w - lw) / 2;
-			base = i * stext_lineh() + stext_ascent() + stext_outl();
-			if (stroke > 0) {
-				stext_mask_line_xft(twin, mask, mgc,
-				    lines[i], lx, base, vis, cm, -1);
-				stext_line_xft(xdraw, lines[i], lx, base,
-				    &xblack, 1);
-			} else {
-				/* Fill-only mask: reuse white stamp path. */
-				stext_mask_line_xft(twin, mask, mgc,
-				    lines[i], lx, base, vis, cm, 0);
-			}
-			stext_line_xft(xdraw, lines[i], lx, base, &xink, 0);
-		}
-		XftColorFree(dpy, vis, cm, &xink);
-		XftColorFree(dpy, vis, cm, &xblack);
-	} else {
-		for (i = 0; i < nl; i++) {
-			lw = XmbTextEscapement(stext_fset(), lines[i],
-			    (int)strlen(lines[i]));
-			lx = (w - lw) / 2;
-			base = i * stext_lineh() + stext_ascent() + stext_outl();
-			XSetForeground(dpy, mgc, 1);
-			if (stroke > 0) {
-				XSetForeground(dpy, pgc, black);
-				stext_line_xlfd(pix, mask, pgc, mgc, lines[i], lx, base, 1);
-			}
-			XSetForeground(dpy, pgc, fill_px);
-			stext_line_xlfd(pix, mask, pgc, mgc, lines[i], lx, base, 0);
-		}
+		return (-1);
 	}
+	for (i = 0; i < nl; i++) {
+		XGlyphInfo e;
+
+		XftTextExtentsUtf8(dpy, stext_xfont(),
+		    (const FcChar8 *)lines[i],
+		    (int)strlen(lines[i]), &e);
+		lw = (int)e.width;
+		lx = (w - lw) / 2;
+		base = i * stext_lineh() + stext_ascent() + stext_outl();
+		if (stroke > 0) {
+			stext_mask_line_xft(twin, mask, mgc,
+			    lines[i], lx, base, vis, cm, -1);
+			stext_line_xft(xdraw, lines[i], lx, base,
+			    &xblack, 1);
+		} else {
+			/* Fill-only mask: reuse white stamp path. */
+			stext_mask_line_xft(twin, mask, mgc,
+			    lines[i], lx, base, vis, cm, 0);
+		}
+		stext_line_xft(xdraw, lines[i], lx, base, &xink, 0);
+	}
+	XftColorFree(dpy, vis, cm, &xink);
+	XftColorFree(dpy, vis, cm, &xblack);
 
 	XShapeCombineMask(dpy, twin, ShapeBounding, 0, 0, mask, ShapeSet);
 	XSetWindowBackgroundPixmap(dpy, twin, pix);

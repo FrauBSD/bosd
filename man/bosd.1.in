@@ -289,7 +289,7 @@ and icon captions, 48px for
 Without
 .Fl f
 the built-in defaults remain
-.Pq DejaVu\ Sans for large text and badges, misc-fixed for Fl t .
+.Pq DejaVu\ Sans for large text and badges; Fixed for Fl t and the gauge overage label .
 Applies to
 .Fl c ,
 .Fl t ,
@@ -308,8 +308,10 @@ assigns the bar no meaning
 Requires
 .Fl g .
 .It Fl g Ar percent
-Draw the gauge bar: 56 ticks bottom-centered on the panel, 64
-pixels up, filled ticks tall and the rest short
+Draw the gauge bar: 56 ticks bottom-centered on the panel,
+sized from the panel height
+.Pq curated at 40-pixel ticks and 64 pixels up on a 1200-tall panel; scales with height ,
+filled ticks tall and the rest short
 .Po
 the classic xosd bar look, drawn by
 .Nm
@@ -490,11 +492,14 @@ color
 the look and place of a screenshot's filename caption.
 Without
 .Fl f
-and at
-.Fl s Li 1
-the face is misc-fixed; otherwise an Xft family
-.Pq Fl f , or Fixed when only scaling
-at the scaled size.
+the face is the Xft Fixed family
+.Pq same face the gauge overage label uses ;
+.Fl f
+selects another family at the scaled size.
+.Fl A
+and
+.Fl O
+change opacity only, not the typeface.
 Lines split on newline
 .Pq escape Ql \ex0a ,
 center individually, and grow downward.

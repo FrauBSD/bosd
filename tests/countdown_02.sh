@@ -10,8 +10,9 @@ bosd_test_init || exit
 test_begin "countdown from 2"
 expect "Giant digits counting 2, then 1"
 expect "About ${BOSD_TEST_HOLD}s per digit (default 2.0; -H overrides)"
+expect "Caption below reading: ${BOSD_TEST_HOLD}s-per-digit"
 expect "Each digit is outlined and centered on the panel"
 note "Always passes hold_seconds (unlike countdown_01)"
 
 # Must tick live; pause mode waits after 1, not during
-show_live -c 2 "$BOSD_TEST_HOLD"
+show_live -a "${BOSD_TEST_HOLD}s-per-digit" -c 2 "$BOSD_TEST_HOLD"
