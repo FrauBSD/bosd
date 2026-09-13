@@ -87,24 +87,119 @@ or brightness key-chords show where the session started. Short ticks
 at or above the watermark are a 50% dimmer shade of `-G`; the return
 zone between current and previous stays full color. Tall ticks are
 never dimmed.
+
 Bare names resolve through `BOSD_PATH`, then the compiled share
-directory (`share/bosd`). Consumers ship their own glyphs; `bosd`
-ships none.
+directory (`share/bosd`). Consumers ship their own glyphs.
 
-## Why another OSD?
+## Why bosd
 
-- **xosd** draws text through shaped windows (the green TV/VCR look).
-  `bosd` composites true-color PNG art with real alpha via XRender.
+Picture the evening you thought the bindings were done.
+
+Mute maps to a glyph. Volume to a bar. Brightness to a string you
+chose from `xlsfonts` on a quiet Tuesday, parked with a literal
+`Y=40` because that is what the man page era taught you: absolute
+pixels, absolute faith. On *this* head, under *this* `xrandr` mode,
+with *this* root pixmap, it looks like a desktop. You `chmod +x`
+the hook scripts and close the lid a little proud.
+
+Wednesday someone docks a second output and the primary is no longer
+the rectangle you dressed. Thursday the panel is taller after a
+firmware bump. Friday (the one that stays in muscle memory) you are
+inside a game that has taken the framebuffer somewhere the session
+never rehearsed. You tap volume without leaving the match. What
+rises is not the polite tick band you tuned under a status bar. It
+is last night's geometry wearing today's pixels: a billboard of a
+whisper, wrong seat, wrong century of the display. The kernel did
+nothing wrong. X did nothing surprising. Your OSD still believed in
+last night's `DisplayWidth`.
+
+That is the older bargain, spoken with respect. xosd and its cousins
+were honest Unix tools in the old sense: a shaped window, a string,
+sometimes a bar, and the rest of `~/.xbindkeysrc`. Font size in
+points or pixels that do not travel. Layout that does not survive
+`xrandr --output ... --mode`. Every WM reinvented the same small
+theatre in shell. Every hotplug sent you back to wardrobe. `fork`,
+`exec`, flash; rapid media chords strobed like a broken bell.
+
+And when the toolkit finally admitted a PNG, it still asked you to
+smuggle the black outline into the file (a second career for every
+icon under `$PREFIX/share`, or a permanent treaty with whichever
+root wallpaper you feared most). Alpha, if you got it, lived in the
+asset pipeline, not as a dial on the evening you needed the fill
+quieter and the halo softer without rebuilding the tree.
+
+Meanwhile a real machine does not serialize your feelings.
+XF86AudioRaiseVolume, a brightness Fn row, a Super chord, a script
+from the greeter path: separate sentences that ought to arrive as
+one composed reply on the glass. Spawn a new OSD process for each
+and the desktop strobes. Stack them by accident and the gauge writes
+through the mute glyph. Give them one timer and the bar dies when
+the icon dies. Performance, here, is not a synthetic benchmark. It
+is whether feedback feels like the session speaking, or like several
+utilities arguing over the same overlay.
+
+bosd exists to end that nightmare.
+
+One background daemon per channel; a small datagram API; clients
+that hand off and return (`bosd(1)` or `libbosd`). A vocabulary
+instead of a kit: glyph, countdown, large confirmation, small
+caption, gauge bar as a peer of the art. Discrete rendering zones
+that do not borrow each other's air (center piece, bottom tick band,
+caption stack clear of the gauge), each with its own hold, so volume
+can linger on the bar while mute expires on its own clock.
+Replace-in-place under rapid chords. No flash. No respawn lottery.
+Click-through. RandR-honest about the primary or internal panel.
+Greeter, game, ordinary session; WM-agnostic on purpose.
+
+Geometry belongs to the panel height, not to a magic constant in a
+shell script. Change the mode and the OSD keeps its seat and its
+bearing; fewer pixels when the canvas is smaller, not a different
+costume on the wrong head. Ship a clean PNG: by default bosd grows
+a legibility halo from the coverage at paint time. Prefer none?
+`-o`. Prefer a softer edge? `-O`. Outline is presentation, not cargo
+in the tree. Alpha is first-class on every layer: XRender
+translucency, respect for alphas already in the art, overrides
+(`-A`, `-O`) without a rebuild. Gauge ticks, captions, countdown
+ink, badges: the same contract.
+
+You still decide what mute means. You still ship your own glyphs.
+Policy stays in the caller (where Unix always said it should). What
+leaves your desk is the second job: the pixel debt, the outline
+gallery, the process-per-keypress tax, the apology after the last
+mode set.
+
+That is the catalog item. Not another way to print green text on a
+shaped window. A way to feel, once, the Friday-in-game volume
+billboard under a foreign `xrandr` mode (and then never have to live
+in that `$DISPLAY` again).
+
+### Compared with the usual suspects
+
+- **xosd / libxosd / libaosd** draw text through shaped windows (the
+  green TV/VCR look); absolute layout is your problem. `bosd`
+  composites true-color PNG art with real alpha via XRender and
+  sizes from the panel.
+- Spawn-per-event OSDs strobe under rapid chords and leave stacking
+  to chance. `bosd` runs one background daemon per channel with an
+  API: discrete zones, independent holds, replace-in-place, no
+  flash, no respawn.
+- PNG-capable OSDs that still leave outlining to the asset pipeline
+  force a baked halo (or none). `bosd` outlines from coverage by
+  default, honors baked alpha in the file, and lets `-A` / `-O` /
+  `-o` retune fill and halo without touching the PNG.
 - **nbosd** shows battery and CPU frequency; fixed purpose. `bosd`
   shows whatever glyph you send it; policy lives in the caller.
-- **xob** is only a bar; **dunst**/notify-osd are D-Bus
-  notification queues. `bosd` has a gauge bar (the classic xosd
-  tick look) beside its glyphs, with no bus, no queue, no daemon
-  config -- one datagram, one OSD.
+- **xob** is only a bar. `bosd`'s gauge is one face of a larger
+  vocabulary, and it coexists with artwork on independent holds.
+- **dunst** / notify-osd are D-Bus notification queues. `bosd` is
+  not a queue: one datagram, replace-in-place, no history chrome.
+- Homegrown WM scripts reinvent volume and brightness OSD in every
+  environment and inherit the pixel debt. `bosd` is the shared
+  engine so the laptop, tablet, convertible, and desktop can speak
+  the same dialect under any window manager.
 - Libraries (libxosd, libaosd) want a C caller. `bosd` is a shell
-  one-liner, warm-daemon fast: repeated toggles repaint in place,
-  no flash, no respawn.
-- RandR-aware: centered on the primary or internal panel, correct
+  one-liner or a `libbosd` client against the same API.
+  RandR-aware: centered on the primary or internal panel, correct
   on rotated and multi-head layouts.
 
 ## Authoring glyphs
@@ -129,6 +224,12 @@ FreeBSD red (#cb1008) at 80% opacity on a transparent ground.
 ```sh
 python3 examples/bsd.py bsd.png
 bosd bsd.png
+```
+
+or
+
+```sh
+make example
 ```
 
 ## Consumers
