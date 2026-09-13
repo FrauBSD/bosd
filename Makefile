@@ -5,12 +5,15 @@ BINDIR?=	${PREFIX}/bin
 LIBDIR?=	${PREFIX}/lib
 INCLUDEDIR?=	${PREFIX}/include
 SHAREDIR?=	${PREFIX}/share
+DOCDIR?=	${SHAREDIR}/doc/bosd
 MANDIR?=	${SHAREDIR}/man/man1
 MAN3DIR?=	${SHAREDIR}/man/man3
 ICONDIR?=	${SHAREDIR}/bosd
 EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
 TESTDIR?=	${SHAREDIR}/bosd/tests
 PKGCONFIGDIR?=	${LIBDIR}/pkgconfig
+PYTHON?=	python3
+INSTALL_TESTS?=	yes
 
 CC?=		cc
 CFLAGS?=	-O2 -Wall -Wextra
@@ -77,7 +80,7 @@ install: all example
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
 		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
 		${DESTDIR}${MAN3DIR} ${DESTDIR}${ICONDIR} \
-		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${TESTDIR} \
+		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${DOCDIR} \
 		${DESTDIR}${PKGCONFIGDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
 	install -m 555 ${SHLIB} ${DESTDIR}${LIBDIR}/${SHLIB}
@@ -91,13 +94,17 @@ install: all example
 	install -m 444 examples/bsd.png ${DESTDIR}${ICONDIR}/
 	install -m 444 examples/bsd.py tools/glyph.py \
 		${DESTDIR}${EXAMPLEDIR}/
+	install -m 444 README.md ${DESTDIR}${DOCDIR}/
+.if ${INSTALL_TESTS} == yes
+	install -d ${DESTDIR}${TESTDIR}
 	install -m 555 tests/run ${DESTDIR}${TESTDIR}/
 	install -m 555 tests/*.sh ${DESTDIR}${TESTDIR}/
+.endif
 
 example: examples/bsd.png
 
 examples/bsd.png: examples/bsd.py tools/glyph.py
-	python3 examples/bsd.py examples/bsd.png
+	${PYTHON} examples/bsd.py examples/bsd.png
 
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
