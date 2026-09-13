@@ -13,6 +13,6 @@ expect "About ${BOSD_TEST_HOLD}s per digit (default 2.0; -H overrides)"
 expect "Caption below reading: ${BOSD_TEST_HOLD}s-per-digit"
 expect "Each digit is outlined and centered on the panel"
 note "Always passes hold_seconds (unlike countdown_01)"
+note "Digits tick in the background; ENTER kills and advances"
 
-# Must tick live; pause mode waits after 1, not during
-show_live -a "${BOSD_TEST_HOLD}s-per-digit" -c 2 "$BOSD_TEST_HOLD"
+show_tick -a "${BOSD_TEST_HOLD}s-per-digit" -c 2 "$BOSD_TEST_HOLD"

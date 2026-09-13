@@ -15,7 +15,6 @@ else
 	expect "About 1s per digit (bosd default; pass -H to override)"
 fi
 expect "Each digit is outlined and centered on the panel"
-note "Countdown runs to completion (not held for ENTER mid-tick)"
+note "Digits tick in the background; ENTER kills and advances"
 
-# Must tick live; pause mode waits after 1, not during
-show_live -c 3 $( countdown_hold_arg )
+show_tick -c 3 $( countdown_hold_arg )

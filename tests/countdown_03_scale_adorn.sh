@@ -14,6 +14,6 @@ expect "Caption above reading: over-half (scaled with -s, not full size)"
 expect "Caption below reading: under-half (scaled with -s, not full size)"
 expect "Compare adornment size against coexist_06 at scale 1"
 note "Fixed 0.1s hold (~2.5s total); -H does not apply here"
+note "Digits tick in the background; ENTER kills and advances"
 
-# Must tick live; pause mode waits after 1, not during
-show_live -s 0.5 -b go -p over-half -a under-half -c 25 0.1
+show_tick -s 0.5 -b go -p over-half -a under-half -c 25 0.1
