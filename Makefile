@@ -30,7 +30,8 @@ LIBOBJS=	${LIBSRCS:.c=.o}
 PROG=		bosd
 PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
 		src/osd_chrome.c src/draw_utf8.c src/badge.c \
-		src/bar.c src/countdown.c src/stext_paint.c src/stext.c
+		src/bar_geom.c src/bar_paint.c src/bar.c \
+		src/countdown.c src/stext_paint.c src/stext.c
 PROGOBJS=	${PROGSRCS:.c=.o}
 MANIN=		man/bosd.1.in
 MAN=		man/bosd.1

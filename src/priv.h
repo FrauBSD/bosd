@@ -100,11 +100,40 @@ struct icon	*icon_lookup(const char *spec, double scale, double alpha,
 		    double outline_alpha, int outline);
 void		 icon_cache_clear(void);
 
-/* bar.c */
+/* bar_geom.c / bar_paint.c / bar.c */
+#define BOSD_BAR_TICKS	56
+
+struct bar_geom {
+	int	tick_h;
+	int	pitch;
+	int	lineh;
+	int	voff;
+	int	outl;
+	int	over_gap;
+	int	text_xoff;
+	int	y_nudge;
+};
+
+void			 bar_geom_refresh(void);
+const struct bar_geom	*bar_geom_get(void);
+int			 bar_ensure_font(void);
+XftFont			*bar_xfont(void);
+void			 bar_font_cleanup(void);
+int			 bar_band_height(void);
+
+void	 bar_paint_ticks(Picture pic, int on, int prev_on, int bx,
+		    unsigned char fr, unsigned char fg, unsigned char fb,
+		    unsigned char fa, unsigned char dr, unsigned char dg,
+		    unsigned char db, unsigned char out_a);
+void	 bar_stamp_label(Picture pic, int rw, int rh, const char *s,
+		    int x, int base, unsigned char r, unsigned char g,
+		    unsigned char b, unsigned char a, int grow_pass);
+int	 bar_blit_window(Window win, Visual *vis, Pixmap *bpix_inout,
+		    Picture src_pic, Pixmap pix, int w, int h);
+
 int	 bar_show(const struct show_req *);
 void	 bar_hide(void);
 void	 bar_cleanup(void);
-int	 bar_band_height(void);	/* panel-bottom clearance the bar occupies */
 int	 run_bar(const struct show_req *);
 
 /* stext_paint.c */
