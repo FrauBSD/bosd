@@ -192,18 +192,20 @@ bar_show(const struct show_req *req)
 	unsigned char lr, lg, lb;
 	double fill_a, out_a;
 
+	/*
+	 * -p/-a/-f/-F adorn the bar only when it is alone.  With an
+	 * icon, -c/-T, or -t they belong to that artwork (and -f/-F
+	 * size that face, not the gauge labels).  -s always scales
+	 * the bar's panel-derived tick geometry.
+	 */
+	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
+	    !req->small;
+	bar_geom_set_scale(req->scale);
 	m = bar_geom_get();
 	w = scr_w;
 	x = scr_x + req->x_off;
 	/* y_nudge shifts the band (positive down) from the curated seat. */
 	y = scr_y + scr_h - m->lineh - m->voff + m->y_nudge + req->y_off;
-	/*
-	 * -p/-a/-f/-F adorn the bar only when it is alone.  With an
-	 * icon, -c/-T, or -t they belong to that artwork (and -f/-F
-	 * size that face, not the gauge labels).
-	 */
-	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
-	    !req->small;
 	face = alone ? req->font : "";
 	pfx = alone ? req->prefix : "";
 	apx = alone ? req->append : "";

@@ -114,12 +114,13 @@ struct bar_geom {
 	int	y_nudge;
 };
 
+void			 bar_geom_set_scale(double scale);
 void			 bar_geom_refresh(void);
 const struct bar_geom	*bar_geom_get(void);
 int			 bar_ensure_font(const char *face);
 XftFont			*bar_xfont(void);
 void			 bar_font_cleanup(void);
-int			 bar_band_height(void);
+int			 bar_band_height(double scale);
 
 void	 bar_paint_ticks(Picture pic, int on, int prev_on, int bx,
 		    unsigned char fr, unsigned char fg, unsigned char fb,

@@ -109,7 +109,7 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 	w = scr_w;
 	h = nl * stext_lineh();
 	x = scr_x + req->x_off;
-	y = scr_y + scr_h - (bar_band_height() + stext_gap() + h) +
+	y = scr_y + scr_h - (bar_band_height(req->scale) + stext_gap() + h) +
 	    req->y_off;
 
 	if (twin != 0 && !t_argb)
@@ -209,7 +209,7 @@ stext_show(const struct show_req *req)
 	 * that appears later cannot cover the text.  First-line baseline
 	 * is then ascent+outl below the window top, still clear of the bar.
 	 */
-	y = scr_y + scr_h - (bar_band_height() + stext_gap() + h) +
+	y = scr_y + scr_h - (bar_band_height(req->scale) + stext_gap() + h) +
 	    req->y_off;
 	if (twin != 0 && t_argb)
 		stext_drop_window();

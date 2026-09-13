@@ -33,7 +33,8 @@ usage(void)
 	    "[-B seconds] \\\n"
 	    "            [-F color] [-f font] [-G color] [-O opacity] "
 	    "[-P percent] \\\n"
-	    "            [-p text] [-x offset] [-y offset] -g percent\n");
+	    "            [-p text] [-s scale] [-x offset] [-y offset] "
+	    "-g percent\n");
 	exit(1);
 }
 
@@ -362,10 +363,9 @@ main(int argc, char **argv)
 	/* Gauge alone: no icon operand, no -c, no -T, no -t. */
 	if (req.gauge >= 0 && count == 0 && !tflag && !Tflag &&
 	    argc == 0) {
-		if (req.badge[0] != '\0' || req.scale != 1.0) {
+		if (req.badge[0] != '\0') {
 			fprintf(stderr,
-			    "bosd: -b and -s adorn the artwork, not "
-			    "the bar\n");
+			    "bosd: -b adorns the artwork, not the bar\n");
 			usage();
 		}
 		decode_field(req.prefix, sizeof(req.prefix));

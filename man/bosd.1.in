@@ -61,6 +61,7 @@
 .Op Fl O Ar opacity
 .Op Fl P Ar percent
 .Op Fl p Ar text
+.Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
 .Fl g Ar percent
@@ -371,10 +372,13 @@ Honors
 .Fl O ,
 .Fl o ,
 .Fl p ,
+.Fl s ,
 .Fl x ,
 and
 .Fl y
-.Pq Fl a , Fl F , Fl f , and Fl p only when the bar is shown alone .
+.Pq Fl a , Fl F , Fl f , and Fl p only when the bar is shown alone;
+.Fl s
+scales the panel-derived tick size whenever the bar is shown .
 .Ar percent
 is 0 to 9999.
 .It Fl P Ar percent
@@ -485,6 +489,11 @@ On
 .Fl t
 it multiplies the panel-derived caption size
 .Pq and outline thickness .
+On
+.Fl g
+it multiplies the panel-derived tick height
+.Pq and related pitch, outline, gaps, and label size;
+bottom clearance stays panel-only so the seat does not float .
 .It Fl T Ar text
 Draw
 .Ar text
@@ -523,7 +532,7 @@ as small caption lines: panel-scaled type
 .Pq 36px on a 1200-tall primary, times Fl s ,
 black-outlined, centered near the panel bottom and stacked above
 the gauge bar's band
-.Pq so a concurrent Fl g cannot cover it; clearance tracks the panel-scaled bar ,
+.Pq so a concurrent Fl g cannot cover it; clearance tracks the panel-scaled bar, times Fl s when shared ,
 filled with the
 .Fl F
 color

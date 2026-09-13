@@ -2,8 +2,9 @@
  * Gauge bar geometry and overage-label font.
  *
  * Panel-proportional sizes from curated pixels at BOSD_PANEL_REF_H
- * (primary scr_h only; never the X virtual desktop).  The overage
- * label face is sized to the tick height, not the reverse.
+ * (primary scr_h only; never the X virtual desktop), times -s.
+ * Bottom clearance (voff) stays panel-only so the seat does not
+ * float.  The overage label face is sized to the tick height.
  */
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +26,7 @@ static struct bar_geom g;
 static XftFont	*bar_font;
 static int	 font_for_tick;
 static char	 font_face[BOSD_FONT_MAX];
+static double	 g_scale = 1.0;
 
 static int
 scale_ref(int ref, int h)
@@ -34,39 +36,70 @@ scale_ref(int ref, int h)
 	return (v);
 }
 
-static void
-bar_geom_clamp(void)
+static int
+scale_user(int panel_px, double s)
 {
-	if (g.tick_h < 8)
-		g.tick_h = 8;
-	g.pitch = g.tick_h / 2;
-	if (g.pitch < 1)
-		g.pitch = 1;
-	if (g.outl < 1)
-		g.outl = 1;
-	if (g.lineh < g.tick_h + 2 * g.outl)
-		g.lineh = g.tick_h + 2 * g.outl;
-	if (g.voff < 1)
-		g.voff = 1;
-	if (g.over_gap < 1)
-		g.over_gap = 1;
-	if (g.text_xoff < 1)
-		g.text_xoff = 1;
+	return ((int)(panel_px * s + (panel_px >= 0 ? 0.5 : -0.5)));
+}
+
+static void
+bar_geom_clamp(struct bar_geom *m)
+{
+	if (m->tick_h < 8)
+		m->tick_h = 8;
+	m->pitch = m->tick_h / 2;
+	if (m->pitch < 1)
+		m->pitch = 1;
+	if (m->outl < 1)
+		m->outl = 1;
+	if (m->lineh < m->tick_h + 2 * m->outl)
+		m->lineh = m->tick_h + 2 * m->outl;
+	if (m->voff < 1)
+		m->voff = 1;
+	if (m->over_gap < 1)
+		m->over_gap = 1;
+	if (m->text_xoff < 1)
+		m->text_xoff = 1;
+}
+
+static double
+clamp_scale(double scale)
+{
+	if (scale < BOSD_SCALE_MIN)
+		return (BOSD_SCALE_MIN);
+	if (scale > BOSD_SCALE_MAX)
+		return (BOSD_SCALE_MAX);
+	return (scale);
+}
+
+static void
+bar_geom_compute(struct bar_geom *m, double scale)
+{
+	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
+	double s = clamp_scale(scale);
+
+	m->tick_h = scale_user(scale_ref(BAR_REF_TICK, h), s);
+	m->outl = scale_user(scale_ref(BAR_REF_OUTL, h), s);
+	m->lineh = m->tick_h + scale_user(scale_ref(BAR_REF_EXTRA, h), s) +
+	    2 * m->outl;
+	/* Bottom seat stays panel-proportional; -s does not lift it. */
+	m->voff = scale_ref(BAR_REF_VOFF, h);
+	m->over_gap = scale_user(scale_ref(BAR_REF_OGAP, h), s);
+	m->text_xoff = scale_user(scale_ref(BAR_REF_XOFF, h), s);
+	m->y_nudge = scale_user(scale_ref(BAR_Y_NUDGE, h), s);
+	bar_geom_clamp(m);
+}
+
+void
+bar_geom_set_scale(double scale)
+{
+	g_scale = clamp_scale(scale);
 }
 
 void
 bar_geom_refresh(void)
 {
-	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
-
-	g.tick_h = scale_ref(BAR_REF_TICK, h);
-	g.outl = scale_ref(BAR_REF_OUTL, h);
-	g.lineh = g.tick_h + scale_ref(BAR_REF_EXTRA, h) + 2 * g.outl;
-	g.voff = scale_ref(BAR_REF_VOFF, h);
-	g.over_gap = scale_ref(BAR_REF_OGAP, h);
-	g.text_xoff = scale_ref(BAR_REF_XOFF, h);
-	g.y_nudge = scale_ref(BAR_Y_NUDGE, h);
-	bar_geom_clamp();
+	bar_geom_compute(&g, g_scale);
 }
 
 const struct bar_geom *
@@ -77,10 +110,12 @@ bar_geom_get(void)
 }
 
 int
-bar_band_height(void)
+bar_band_height(double scale)
 {
-	bar_geom_refresh();
-	return (g.voff + g.lineh - g.y_nudge);
+	struct bar_geom m;
+
+	bar_geom_compute(&m, scale);
+	return (m.voff + m.lineh - m.y_nudge);
 }
 
 static XftFont *
