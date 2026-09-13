@@ -2,7 +2,7 @@
  * Gauge bar: the classic tick-bar OSD.  56 ticks bottom-centered on
  * the panel; tall ticks fill to the given percentage, the rest stay
  * short.  Geometry scales with panel height from curated pixel sizes
- * at BAR_REF_H (40px ticks, 64px bottom clearance on a 1200-tall
+ * at BOSD_PANEL_REF_H (40px ticks, 64px bottom clearance on a 1200-tall
  * panel); the overage label face is sized to the tick height, not the
  * other way around.  By default ticks (and the overage label) carry a
  * black outline; -A sets fill opacity, -O the outline's, and -o skips
@@ -34,15 +34,14 @@
 #include "priv.h"
 
 #define BAR_TICKS	56	/* tick count across the bar */
-/* Curated sizes below apply when scr_h == BAR_REF_H; elsewhere scale. */
-#define BAR_REF_H	1200	/* panel height those pixels were tuned for */
-#define BAR_REF_TICK	40	/* tall tick height at BAR_REF_H */
-#define BAR_REF_VOFF	64	/* bottom clearance at BAR_REF_H */
+/* Curated sizes below apply when scr_h == BOSD_PANEL_REF_H; elsewhere scale. */
+#define BAR_REF_TICK	40	/* tall tick height at BOSD_PANEL_REF_H */
+#define BAR_REF_VOFF	64	/* bottom clearance at BOSD_PANEL_REF_H */
 #define BAR_REF_EXTRA	10	/* lineh pad beyond tick+outline at ref */
-#define BAR_REF_OUTL	2	/* outline thickness at BAR_REF_H */
+#define BAR_REF_OUTL	2	/* outline thickness at BOSD_PANEL_REF_H */
 #define BAR_REF_OGAP	20	/* overage label gap at ref */
 #define BAR_REF_XOFF	10	/* label inset at ref */
-#define BAR_Y_NUDGE	(-2)	/* raise the band this many px at BAR_REF_H */
+#define BAR_Y_NUDGE	(-2)	/* raise the band this many px at ref */
 
 static Window	 bwin;
 static Pixmap	 bpix;		/* ARGB backing; survives Expose */
@@ -58,36 +57,36 @@ static int	 font_for_tick;	/* tick_h used to open bar_font */
 /*
  * Panel-proportional geometry from the primary output's height
  * (scr_h after refresh_screen_geom; never the X virtual desktop).
- * At scr_h == BAR_REF_H the curated pixel sizes are unchanged;
+ * At scr_h == BOSD_PANEL_REF_H the curated pixel sizes are unchanged;
  * other primary heights scale from that baseline.
  */
 static void
 bar_geom(void)
 {
-	int h = scr_h > 0 ? scr_h : BAR_REF_H;
+	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
 
-	tick_h = BAR_REF_TICK * h / BAR_REF_H;
+	tick_h = BAR_REF_TICK * h / BOSD_PANEL_REF_H;
 	if (tick_h < 8)
 		tick_h = 8;
 	pitch = tick_h / 2;
 	if (pitch < 1)
 		pitch = 1;
-	outl = BAR_REF_OUTL * h / BAR_REF_H;
+	outl = BAR_REF_OUTL * h / BOSD_PANEL_REF_H;
 	if (outl < 1)
 		outl = 1;
-	lineh = tick_h + BAR_REF_EXTRA * h / BAR_REF_H + 2 * outl;
+	lineh = tick_h + BAR_REF_EXTRA * h / BOSD_PANEL_REF_H + 2 * outl;
 	if (lineh < tick_h + 2 * outl)
 		lineh = tick_h + 2 * outl;
-	voff = BAR_REF_VOFF * h / BAR_REF_H;
+	voff = BAR_REF_VOFF * h / BOSD_PANEL_REF_H;
 	if (voff < 1)
 		voff = 1;
-	over_gap = BAR_REF_OGAP * h / BAR_REF_H;
+	over_gap = BAR_REF_OGAP * h / BOSD_PANEL_REF_H;
 	if (over_gap < 1)
 		over_gap = 1;
-	text_xoff = BAR_REF_XOFF * h / BAR_REF_H;
+	text_xoff = BAR_REF_XOFF * h / BOSD_PANEL_REF_H;
 	if (text_xoff < 1)
 		text_xoff = 1;
-	y_nudge = BAR_Y_NUDGE * h / BAR_REF_H;
+	y_nudge = BAR_Y_NUDGE * h / BOSD_PANEL_REF_H;
 }
 
 /*
@@ -134,14 +133,15 @@ bar_ensure_font(void)
 }
 
 /*
- * How far up from the panel bottom the gauge band reaches (voff
- * plus the tick window).  Used so -t captions sit entirely above it.
+ * How far up from the panel bottom the gauge band reaches, matching
+ * the window top (voff + lineh - y_nudge).  Used so -t captions sit
+ * entirely above it at any primary height.
  */
 int
 bar_band_height(void)
 {
 	bar_geom();
-	return (voff + lineh);
+	return (voff + lineh - y_nudge);
 }
 
 /* ARGB click-through window for translucent ticks. */

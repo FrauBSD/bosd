@@ -86,6 +86,9 @@ void	 caption_measure(const char *text, int px, int *w, int *h,
 void	 draw_caption(const char *text, int px, int anchor_y, int below,
 		    const char *face);
 void	 badge_cleanup(void);
+/* Primary-panel height the curated OSD pixel sizes were tuned for. */
+#define BOSD_PANEL_REF_H	1200
+
 /* Default -t / gauge-label Xft face (same as the historic -A path). */
 #define BOSD_FIXED_FACE	"Fixed"
 

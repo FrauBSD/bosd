@@ -175,12 +175,10 @@ countdown_begin(const struct show_req *req)
 		return (-1);
 
 	/*
-	 * Panel-derived size: -c uses half the panel height (times
-	 * 0.85); -T uses a quarter so default large text sits half
-	 * that tall.
+	 * Panel-derived size: -c uses a quarter of the panel height
+	 * (times 0.85); -T keeps the prior quarter-panel default.
 	 */
-	pointsize = (int)((scr_h / (req->text ? 4 : 2)) * 85 / 100 *
-	    req->scale + 0.5);
+	pointsize = (int)((scr_h / 4) * 85 / 100 * req->scale + 0.5);
 	if (pointsize < 16)
 		pointsize = 16;
 	if (req->scale <= 1.0 && pointsize > 612)

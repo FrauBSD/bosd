@@ -1,12 +1,12 @@
 /*
  * Small text: caption-sized lines (a screenshot's filename and the
- * like) in 48px type (times -s), black-outlined and filled in a
- * caller-given color (default green), centered near the panel bottom
- * with the block sitting above the gauge bar's band so a concurrent
- * -g never overlaps; lines grow downward.
- * Default face is Xft BOSD_FIXED_FACE; -f selects another family.
- * -A/-O need real alpha so those paints use an ARGB window; -o simply
- * skips the outline.  Face and size do not depend on -A/-O.
+ * like) in panel-scaled type (times -s; 36px on a 1200-tall primary),
+ * black-outlined and filled in a caller-given color (default green),
+ * centered near the panel bottom with the block sitting above the
+ * gauge bar's band so a concurrent -g never overlaps; lines grow
+ * downward.  Default face is Xft BOSD_FIXED_FACE; -f selects another
+ * family.  -A/-O need real alpha so those paints use an ARGB window;
+ * -o simply skips the outline.  Face and size do not depend on -A/-O.
  */
 #include <poll.h>
 #include <signal.h>
@@ -21,8 +21,19 @@
 
 #include "priv.h"
 
-#define STEXT_GAP  16	/* air between caption bottom and gauge top */
+#define STEXT_REF_GAP 16	/* air above gauge band at BOSD_PANEL_REF_H */
 #define STEXT_MAXLINES 8
+
+static int
+stext_gap(void)
+{
+	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
+	int g = STEXT_REF_GAP * h / BOSD_PANEL_REF_H;
+
+	if (g < 4)
+		g = 4;
+	return (g);
+}
 
 static Window	 twin;
 static Pixmap	 pix, mask;
@@ -98,7 +109,7 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 	w = scr_w;
 	h = nl * stext_lineh();
 	x = scr_x + req->x_off;
-	y = scr_y + scr_h - (bar_band_height() + STEXT_GAP + h) +
+	y = scr_y + scr_h - (bar_band_height() + stext_gap() + h) +
 	    req->y_off;
 
 	if (twin != 0 && !t_argb)
@@ -198,7 +209,7 @@ stext_show(const struct show_req *req)
 	 * that appears later cannot cover the text.  First-line baseline
 	 * is then ascent+outl below the window top, still clear of the bar.
 	 */
-	y = scr_y + scr_h - (bar_band_height() + STEXT_GAP + h) +
+	y = scr_y + scr_h - (bar_band_height() + stext_gap() + h) +
 	    req->y_off;
 	if (twin != 0 && t_argb)
 		stext_drop_window();

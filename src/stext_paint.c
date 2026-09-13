@@ -1,8 +1,9 @@
 /*
  * Small-text fonts and shaped-line painters used by stext.c.
  *
- * Default face is Xft BOSD_FIXED_FACE at STEXT_PX; same face the
- * ARGB/-A path always used, so -A no longer swaps typefaces.
+ * Default face is Xft BOSD_FIXED_FACE; pixel size scales with the
+ * primary panel from STEXT_REF_PX at BOSD_PANEL_REF_H (3/4 of the
+ * former fixed 48).  Same face the ARGB/-A path always used.
  */
 #include <stdio.h>
 #include <string.h>
@@ -13,12 +14,35 @@
 
 #include "priv.h"
 
-#define STEXT_PX   48	/* base pixel size before -s */
-#define STEXT_OUTL 4	/* base outline thickness before -s */
+#define STEXT_REF_PX   36	/* base pixelsize at BOSD_PANEL_REF_H */
+#define STEXT_REF_OUTL 3	/* outline thickness at BOSD_PANEL_REF_H */
 
 static XftFont	*xfont;
 static char	 xface[BOSD_FONT_MAX];
 static int	 ascent, lineh, outl, xpx;
+
+/* Panel-scaled base size before -s (primary scr_h, not virtual desktop). */
+static int
+stext_ref_px(void)
+{
+	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
+	int px = STEXT_REF_PX * h / BOSD_PANEL_REF_H;
+
+	if (px < 8)
+		px = 8;
+	return (px);
+}
+
+static int
+stext_ref_outl(void)
+{
+	int h = scr_h > 0 ? scr_h : BOSD_PANEL_REF_H;
+	int ol = STEXT_REF_OUTL * h / BOSD_PANEL_REF_H;
+
+	if (ol < 1)
+		ol = 1;
+	return (ol);
+}
 
 void
 stext_close_fonts(void)
@@ -37,16 +61,18 @@ stext_metrics(const char *face, double scale)
 	char pattern[BOSD_FONT_MAX + 64];
 	char attrs[64];
 	const char *want = (face != NULL) ? face : "";
-	int px, ol;
+	int px, ol, base_px, base_ol;
 
 	if (scale < BOSD_SCALE_MIN)
 		scale = BOSD_SCALE_MIN;
 	if (scale > BOSD_SCALE_MAX)
 		scale = BOSD_SCALE_MAX;
-	px = (int)(STEXT_PX * scale + 0.5);
+	base_px = stext_ref_px();
+	base_ol = stext_ref_outl();
+	px = (int)(base_px * scale + 0.5);
 	if (px < 8)
 		px = 8;
-	ol = (int)(STEXT_OUTL * scale + 0.5);
+	ol = (int)(base_ol * scale + 0.5);
 	if (ol < 1)
 		ol = 1;
 
