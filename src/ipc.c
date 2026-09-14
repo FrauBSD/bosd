@@ -21,11 +21,16 @@
  * "CLEAR" hides the active render(s).  A show with clear set sends
  * CLEAR first so artwork, gauge, and caption all drop before the
  * new paint.  A gauge travels separately as "BAR HOLD XOFF YOFF PCT
- * COLOR PREV ALPHA OALPHA OUTL" and coexists with the artwork and
- * with small text.  Small text (CNT -2) is its own slot: only another
- * caption or CLEAR replaces it.  PREV is a prior-percent watermark
- * (-1 disables); the daemon latches the first PREV when the bar
- * appears and ignores later ones until the bar hides.  ALPHA < 0
+ * COLOR PREV ALPHA OALPHA OUTL [SCALE TCOLOR FONT PFX APX]" and
+ * coexists with the artwork and with small text.  Trailing fields are
+ * optional for older clients; SCALE defaults to 1, captions/font/color
+ * absent when omitted.  When the client also sends artwork (or -c/-T/
+ * -t) in the same show, BAR carries "-" for TCOLOR/FONT/PFX/APX so
+ * those adornments stay on the artwork SHOW (bar_show only labels a
+ * gauge-alone request).  Small text (CNT -2) is its own slot: only
+ * another caption or CLEAR replaces it.  PREV is a prior-percent
+ * watermark (-1 disables); the daemon latches the first PREV when the
+ * bar appears and ignores later ones until the bar hides.  ALPHA < 0
  * means full fill opacity on the bar (native PNG does not apply);
  * otherwise 0..1 fill opacity.  OALPHA is the black outline opacity
  * (0..1, default 1).  OUTL 1 draws the tick outline and 0 skips it
@@ -160,17 +165,37 @@ send_show_to(const char *sock, const struct show_req *req)
 		return (-1);
 
 	if (req->gauge >= 0) {
+		int bar_alone;
+
+		/*
+		 * BAR is its own datagram, so after parse the gauge
+		 * looks alone.  -p/-a/-f/-F belong on the artwork
+		 * SHOW when co-displaying; only a gauge-alone BAR
+		 * carries label fields (matches bar_show()).
+		 */
+		bar_alone = req->spec[0] == '\0' && req->count <= 0 &&
+		    !req->text && !req->small;
+		if (bar_alone) {
+			encode_ws(req->prefix, pfx, sizeof(pfx));
+			encode_ws(req->append, apx, sizeof(apx));
+			encode_ws(req->font, font, sizeof(font));
+		} else {
+			strlcpy(pfx, "-", sizeof(pfx));
+			strlcpy(apx, "-", sizeof(apx));
+			strlcpy(font, "-", sizeof(font));
+		}
 		snprintf(msg, sizeof(msg),
-		    "BAR %.2f %d %d %d %s %d %.3f %.3f %d",
+		    "BAR %.2f %d %d %d %s %d %.3f %.3f %d %.3f %s %s %s %s",
 		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
 		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
 		    req->gauge_prev, req->alpha, req->outline_alpha,
-		    req->outline);
+		    req->outline, req->scale > 0.0 ? req->scale : 1.0,
+		    bar_alone && req->tcolor[0] != '\0' ? req->tcolor : "-",
+		    bar_alone && req->font[0] != '\0' ? font : "-",
+		    pfx, apx);
 		if (send_dgram(sock, msg) != 0)
 			return (-1);
-		/* Gauge alone, or artwork too? */
-		if (req->spec[0] == '\0' && req->count <= 0 &&
-		    !req->text && !req->small)
+		if (bar_alone)
 			return (0);
 	}
 	encode_ws(req->prefix, pfx, sizeof(pfx));
@@ -228,17 +253,28 @@ parse_show(const char *buf, struct show_req *req)
 		return (0);
 	}
 	if (strncmp(buf, "BAR ", 4) == 0) {
-		double alpha, oalpha;
+		double alpha, oalpha, scale;
+		char tcolor[BOSD_COLOR_MAX];
+		char font[BOSD_FONT_MAX * 4];
+		char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 		int outline;
 
 		memset(req, 0, sizeof(*req));
 		req->gauge_prev = -1;
+		req->scale = 1.0;
 		alpha = BOSD_ALPHA_NATIVE;
 		oalpha = BOSD_OUTLINE_ALPHA_DEF;
 		outline = 1;
-		n = sscanf(buf + 4, "%lf %d %d %d %31s %d %lf %lf %d",
+		scale = 1.0;
+		tcolor[0] = '\0';
+		font[0] = '\0';
+		pfx[0] = '\0';
+		apx[0] = '\0';
+		n = sscanf(buf + 4,
+		    "%lf %d %d %d %31s %d %lf %lf %d %lf %31s %511s %255s %255s",
 		    &hold, &x_off, &y_off, &req->gauge, req->color,
-		    &req->gauge_prev, &alpha, &oalpha, &outline);
+		    &req->gauge_prev, &alpha, &oalpha, &outline, &scale,
+		    tcolor, font, pfx, apx);
 		if (n < 5 || req->gauge < 0)
 			return (-1);
 		if (n < 6)
@@ -249,6 +285,8 @@ parse_show(const char *buf, struct show_req *req)
 			oalpha = BOSD_OUTLINE_ALPHA_DEF;
 		if (n < 9)
 			outline = 1;
+		if (n < 10 || scale <= 0.0)
+			scale = 1.0;
 		if (hold != -1.0 && hold <= 0.0)
 			hold = BOSD_GAUGE_HOLD_DEF;
 		if (alpha >= 0.0) {
@@ -266,9 +304,18 @@ parse_show(const char *buf, struct show_req *req)
 		req->gauge_hold = hold;
 		req->x_off = x_off;
 		req->y_off = y_off;
+		req->scale = scale;
 		req->alpha = alpha;
 		req->outline_alpha = oalpha;
 		req->outline = outline != 0;
+		if (n >= 11 && strcmp(tcolor, "-") != 0)
+			strlcpy(req->tcolor, tcolor, sizeof(req->tcolor));
+		if (n >= 12 && strcmp(font, "-") != 0)
+			decode_escapes(font, req->font, sizeof(req->font));
+		if (n >= 13 && strcmp(pfx, "-") != 0)
+			decode_escapes(pfx, req->prefix, sizeof(req->prefix));
+		if (n >= 14 && strcmp(apx, "-") != 0)
+			decode_escapes(apx, req->append, sizeof(req->append));
 		return (0);
 	}
 

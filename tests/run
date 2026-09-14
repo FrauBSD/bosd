@@ -2,11 +2,13 @@
 #
 # Visual walkthrough of bosd(1)
 #
-# Prints what to look for on the panel, then shows it with bosd -D
-# (in-process paint; does not disturb a warm channel daemon)
+# Prints what to look for on the panel, then shows it.  Default: bosd
+# -D (in-process).  With -d: one warm channel daemon for the whole
+# run (exercises IPC the way a session does)
 #
-# Usage: tests/run [-hp] [-H seconds] [test-name ...]
+# Usage: tests/run [-dhp] [-H seconds] [test-name ...]
 #        tests/run                 # every case (*.sh except lib.sh), A-Z
+#        tests/run -d              # singular -n bosd-test daemon
 #        tests/run -p              # hold -1 in background; ENTER kills
 #        tests/run bar             # every bar_NN_* case
 #        tests/run text            # stext_* and htext_*
@@ -26,14 +28,18 @@ BOSD_TEST_DIR=$( cd "${0%/*}" && pwd ) || exit
 usage()
 {
 	printf '%s\n' \
-	    "Usage: tests/run [-hp] [-H seconds] [test-name ...]" \
+	    "Usage: tests/run [-dhp] [-H seconds] [test-name ...]" \
 	    "Options:" \
 	    "	-H seconds	Hold each paint this long (default 2.0);" \
 	    "			if given, also the per-digit hold for -c" \
+	    "	-d		Warm one -n bosd-test daemon for the run" \
+	    "			(IPC path; default is bosd -D per paint)" \
 	    "	-h		Show this help" \
-	    "	-p		Hold -1 in the background; ENTER kills and advances" \
+	    "	-p		Hold -1 until ENTER; then kill (-D) or -C (-d)" \
 	    "Environment:" \
 	    "	BOSD_TEST_HOLD		Same as -H" \
+	    "	BOSD_TEST_INSTANCE	Channel name with -d (default bosd-test)" \
+	    "	BOSD_TEST_TICK_SETTLE	Settle seconds after show_tick (-d)" \
 	    "	DISPLAY			Required (X11)"
 	exit ${1:-0}
 }
@@ -82,6 +88,7 @@ run_one()
 	printf '\n######## %s ########\n' "$__name"
 	# Each case is a standalone script (re-inits from lib.sh)
 	sh "$__path" || __rc=$?
+	bosd_cli_clear
 	if [ "$__rc" -ne 0 ]; then
 		printf 'FAIL: %s (exit %s)\n' "$__name" "$__rc" >&2
 		return "$__rc"
@@ -93,6 +100,7 @@ run_one()
 on_interrupt()
 {
 	printf '\nbosd-test: interrupted\n' >&2
+	bosd_daemon_stop
 	exit 130
 }
 
@@ -100,10 +108,12 @@ on_interrupt()
 # MAIN
 #
 
+dflag=
 pflag=
-while getopts H:hp flag; do
+while getopts H:dhp flag; do
 	case "$flag" in
 	H) BOSD_TEST_HOLD="$OPTARG" ;;
+	d) dflag=1 ;;
 	h) usage 0 ;;
 	p) pflag=1 ;;
 	*) usage 1 ;;
@@ -114,8 +124,14 @@ shift $(( $OPTIND - 1 )) # getopt flags
 trap on_interrupt INT
 
 if [ "$pflag" ]; then
-	# Stay on screen until ENTER; show() uses hold_arg (-1).
+	# Stay on screen until ENTER; show() uses hold_arg (-1)
 	BOSD_TEST_PAUSE=1
+fi
+# Only -d warms a daemon; ignore a leftover BOSD_TEST_DAEMON in the env
+if [ "$dflag" ]; then
+	BOSD_TEST_DAEMON=1
+else
+	BOSD_TEST_DAEMON=
 fi
 
 # Explicit -H or BOSD_TEST_HOLD in the environment: countdowns get
@@ -126,11 +142,12 @@ if [ "${BOSD_TEST_HOLD+set}" ]; then
 	export BOSD_TEST_HOLD BOSD_TEST_HOLD_SET
 fi
 
-# Children (NN-*.sh) must see pause / dir; hold only if explicit above
-export BOSD_TEST_DIR BOSD_TEST_PAUSE
+# Children (NN-*.sh) must see pause / dir / daemon; hold only if explicit
+export BOSD_TEST_DIR BOSD_TEST_PAUSE BOSD_TEST_DAEMON BOSD_TEST_INSTANCE
 
 bosd_test_init || exit
-export BOSD BOSD_TEST_ROOT BOSD_TEST_PAUSE
+export BOSD BOSD_TEST_ROOT BOSD_TEST_PAUSE BOSD_TEST_DAEMON \
+    BOSD_TEST_INSTANCE
 if [ "$BOSD_TEST_HOLD_SET" ]; then
 	export BOSD_TEST_HOLD BOSD_TEST_HOLD_SET
 fi
@@ -168,8 +185,16 @@ fi
 printf 'bosd-test: %s case(s) queued\n' "$#"
 note "Watch the primary panel; each case prints EXPECT then paints"
 note "A compositor (e.g. picom) is needed to see translucency"
+if [ "$dflag" ]; then
+	note "Daemon mode: one -n $BOSD_TEST_INSTANCE channel for the run"
+	bosd_daemon_start || exit
+fi
 if [ "$pflag" ]; then
-	note "Pause mode: hold -1 in background; ENTER kills and advances"
+	if [ "$dflag" ]; then
+		note "Pause mode: hold -1 on the channel; ENTER clears (-C)"
+	else
+		note "Pause mode: hold -1 in background; ENTER kills and advances"
+	fi
 fi
 
 __failed=0
@@ -178,6 +203,8 @@ for __t in "$@"; do
 	__ran=$(( $__ran + 1 ))
 	run_one "$__t" || __failed=$(( $__failed + 1 ))
 done
+
+bosd_daemon_stop
 
 printf '\n######## summary ########\n'
 printf 'bosd-test: ran %s, failed %s\n' "$__ran" "$__failed"

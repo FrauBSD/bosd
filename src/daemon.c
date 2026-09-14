@@ -47,12 +47,17 @@ cleanup(int sig __unused)
 {
 	icon_cache_clear();
 	x11_cleanup();
+	/*
+	 * Only the listening daemon owns the socket and pid file.
+	 * One-shot -D/-local paints share this cleanup but must not
+	 * unlink the warm channel out from under a running daemon.
+	 */
 	if (sock >= 0) {
 		close(sock);
 		sock = -1;
+		unlink(sock_name);
+		unlink(pid_name);
 	}
-	unlink(sock_name);
-	unlink(pid_name);
 	_exit(0);
 }
 
@@ -76,7 +81,13 @@ main_stop(void)
 {
 	if (m_kind == M_COUNT || m_kind == M_TEXT)
 		countdown_end();
-	else if (m_kind != M_NONE)
+	/*
+	 * countdown_end() only drops fonts/draw; the fullscreen
+	 * overlay must unmap too (run_countdown / run_text do both).
+	 * Without this, a finished -c/-T on a warm daemon leaves the
+	 * last digit or text stuck on screen.
+	 */
+	if (m_kind != M_NONE)
 		hide_overlay();
 	m_kind = M_NONE;
 	m_icon = NULL;

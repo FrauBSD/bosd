@@ -65,6 +65,9 @@ bar_geom_clamp(struct bar_geom *m)
 static double
 clamp_scale(double scale)
 {
+	/* Unset/invalid (IPC memset 0) means default, not BOSD_SCALE_MIN. */
+	if (scale <= 0.0)
+		return (1.0);
 	if (scale < BOSD_SCALE_MIN)
 		return (BOSD_SCALE_MIN);
 	if (scale > BOSD_SCALE_MAX)

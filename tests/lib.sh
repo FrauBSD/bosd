@@ -9,6 +9,9 @@ if [ "$BOSD_TEST_LIB_LOADED" ]; then
 fi
 BOSD_TEST_LIB_LOADED=1
 
+# Dedicated channel when tests/run -d warms a singular daemon
+BOSD_TEST_INSTANCE="${BOSD_TEST_INSTANCE:-bosd-test}"
+
 #
 # Locate ./bosd (or PATH), require DISPLAY, set hold default
 #
@@ -63,6 +66,10 @@ bosd_test_init()
 		    "$BOSD" "$( "$BOSD" -v )"
 		printf 'bosd-test: hold=%ss DISPLAY=%s\n' \
 		    "$BOSD_TEST_HOLD" "$DISPLAY"
+		if [ "$BOSD_TEST_DAEMON" ]; then
+			printf 'bosd-test: daemon mode (-n %s)\n' \
+			    "$BOSD_TEST_INSTANCE"
+		fi
 		if [ "$BOSD_TEST_PAUSE" ]; then
 			printf 'bosd-test: pause mode (ENTER advances)\n'
 		fi
@@ -85,11 +92,50 @@ test_begin()
 	printf '\n==> %s\n' "$*"
 }
 
+#
+# Invoke bosd: -D when alone, or -n $BOSD_TEST_INSTANCE against the
+# warm harness daemon (tests/run -d)
+#
+bosd_cli()
+{
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		"$BOSD" -n "$BOSD_TEST_INSTANCE" "$@"
+	else
+		"$BOSD" -D "$@"
+	fi
+}
+
+bosd_cli_clear()
+{
+	[ "$BOSD_TEST_DAEMON" ] || return 0
+	"$BOSD" -n "$BOSD_TEST_INSTANCE" -C 2> /dev/null || : clear failed
+}
+
+#
+# After a daemon handoff the client returns at once; sleep so the
+# paint can be seen, then clear the channel for the next case
+#
+bosd_daemon_settle()
+{
+	local __secs="$1"
+
+	[ "$BOSD_TEST_DAEMON" ] || return 0
+	if [ "$BOSD_TEST_PAUSE" ]; then
+		pause_for_enter
+		bosd_cli_clear
+		return 0
+	fi
+	[ "$__secs" ] || __secs="$BOSD_TEST_HOLD"
+	sleep "$__secs"
+	bosd_cli_clear
+}
+
 show_stop()
 {
 	#
-	# Tear down the background bosd from show().  kill $! as soon
-	# as ENTER arrives; ignore a race where it already exited
+	# Tear down the background bosd from show() in -D pause mode.
+	# kill $! as soon as ENTER arrives; ignore a race where it
+	# already exited
 	#
 	kill $! 2> /dev/null || : already gone
 	wait $! 2> /dev/null || : errors ignored
@@ -97,7 +143,11 @@ show_stop()
 
 show_interrupted()
 {
-	show_stop
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		bosd_cli_clear
+	else
+		show_stop
+	fi
 	exit 130
 }
 
@@ -112,15 +162,72 @@ pause_for_enter()
 }
 
 #
-# Run bosd with -D (in-process, ignore daemon).
-# With BOSD_TEST_PAUSE: hold is -1, paint in the background, wait for
-# ENTER, then kill $!
+# Start the singular harness daemon on BOSD_TEST_INSTANCE
+#
+bosd_daemon_start()
+{
+	local __i= __sock= __uid=
+
+	[ "$BOSD_TEST_DAEMON" ] || return 0
+	__uid=$( id -u ) || return
+	__sock="/tmp/bosd.${BOSD_TEST_INSTANCE}.${__uid}.sock"
+	bosd_cli_clear
+	if [ "$BOSD_TEST_DAEMON_PID" ]; then
+		kill "$BOSD_TEST_DAEMON_PID" 2> /dev/null || : already gone
+		wait "$BOSD_TEST_DAEMON_PID" 2> /dev/null || : errors ignored
+		BOSD_TEST_DAEMON_PID=
+	fi
+	rm -f "$__sock" \
+	    "/tmp/bosd.${BOSD_TEST_INSTANCE}.${__uid}.pid" \
+	    2> /dev/null || : stale ipc
+	"$BOSD" -n "$BOSD_TEST_INSTANCE" -d &
+	BOSD_TEST_DAEMON_PID=$!
+	export BOSD_TEST_DAEMON_PID
+	__i=0
+	while [ "$__i" -lt 50 ]; do
+		if [ -S "$__sock" ] && kill -0 "$BOSD_TEST_DAEMON_PID" \
+		    2> /dev/null; then
+			note "warmed channel -n $BOSD_TEST_INSTANCE (pid $BOSD_TEST_DAEMON_PID)"
+			return 0
+		fi
+		sleep 0.1
+		__i=$(( $__i + 1 ))
+	done
+	printf '%s\n' \
+	    "bosd-test: daemon -n $BOSD_TEST_INSTANCE failed to start" >&2
+	return 1
+}
+
+bosd_daemon_stop()
+{
+	[ "$BOSD_TEST_DAEMON" ] || return 0
+	bosd_cli_clear
+	if [ "$BOSD_TEST_DAEMON_PID" ]; then
+		kill "$BOSD_TEST_DAEMON_PID" 2> /dev/null || : already gone
+		wait "$BOSD_TEST_DAEMON_PID" 2> /dev/null || : errors ignored
+		BOSD_TEST_DAEMON_PID=
+	fi
+}
+
+#
+# Run bosd (daemon channel or -D).  With BOSD_TEST_PAUSE and -D: hold
+# -1 in the background, wait for ENTER, kill $!.  With a warm daemon:
+# hand off, wait for ENTER or settle, then -C
 #
 show()
 {
 	printf 'RUN:'
-	printf ' %s' "$BOSD" -D "$@"
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		printf ' %s' "$BOSD" -n "$BOSD_TEST_INSTANCE" "$@"
+	else
+		printf ' %s' "$BOSD" -D "$@"
+	fi
 	printf '\n'
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		bosd_cli "$@" || return
+		bosd_daemon_settle
+		return
+	fi
 	if [ ! "$BOSD_TEST_PAUSE" ]; then
 		"$BOSD" -D "$@"
 		return
@@ -137,13 +244,23 @@ show()
 
 #
 # Foreground paint that must run to completion (e.g. -c ticking alone).
-# In pause mode, wait for ENTER after it finishes
+# In pause mode, wait for ENTER after it finishes.  Daemon mode: hand
+# off and settle (countdown settle is longer; see show_tick)
 #
 show_live()
 {
 	printf 'RUN:'
-	printf ' %s' "$BOSD" -D "$@"
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		printf ' %s' "$BOSD" -n "$BOSD_TEST_INSTANCE" "$@"
+	else
+		printf ' %s' "$BOSD" -D "$@"
+	fi
 	printf '\n'
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		bosd_cli "$@" || return
+		bosd_daemon_settle
+		return
+	fi
 	"$BOSD" -D "$@" || return
 	if [ "$BOSD_TEST_PAUSE" ]; then
 		pause_for_enter
@@ -152,14 +269,25 @@ show_live()
 
 #
 # Countdown (or other timed sequence) that must tick while ENTER is
-# already offered.  Pause mode: monitor-mode background job + bg, then
-# kill $! on ENTER.  Without pause: run in the foreground to completion
+# already offered.  Pause+-D: monitor-mode background job + bg, then
+# kill $! on ENTER.  Daemon: hand off, settle long enough for ticks,
+# then -C.  Without pause or daemon: run in the foreground
 #
 show_tick()
 {
 	printf 'RUN:'
-	printf ' %s' "$BOSD" -D "$@"
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		printf ' %s' "$BOSD" -n "$BOSD_TEST_INSTANCE" "$@"
+	else
+		printf ' %s' "$BOSD" -D "$@"
+	fi
 	printf '\n'
+	if [ "$BOSD_TEST_DAEMON" ]; then
+		bosd_cli "$@" || return
+		# Cover long -c runs (e.g. 25 x 0.1s) and default 3-digit
+		bosd_daemon_settle "${BOSD_TEST_TICK_SETTLE:-12}"
+		return
+	fi
 	if [ ! "$BOSD_TEST_PAUSE" ]; then
 		"$BOSD" -D "$@"
 		return
@@ -179,8 +307,8 @@ show_tick()
 hold_arg()
 {
 	#
-	# Pause mode: indefinite hold so ENTER can kill $!.
-	# Countdown must use countdown_hold_arg (-c rejects -1)
+	# Pause mode: indefinite hold so ENTER can kill $! (or -C the
+	# channel).  Countdown must use countdown_hold_arg (-c rejects -1)
 	#
 	if [ "$BOSD_TEST_PAUSE" ]; then
 		printf '%s' -1

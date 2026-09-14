@@ -221,10 +221,20 @@ stext_show(const struct show_req *req)
 	depth = DefaultDepth(dpy, screen);
 	vis = DefaultVisual(dpy, screen);
 	cm = DefaultColormap(dpy, screen);
-	if (pix != 0)
+	/*
+	 * Detach before free: the prior paint's pixmap is still the
+	 * window background (same hazard bar_hide avoids by dropping
+	 * the window).  Freeing it in place corrupts the next map.
+	 */
+	if (pix != 0) {
+		XSetWindowBackgroundPixmap(dpy, twin, None);
 		XFreePixmap(dpy, pix);
-	if (mask != 0)
+		pix = 0;
+	}
+	if (mask != 0) {
 		XFreePixmap(dpy, mask);
+		mask = 0;
+	}
 	pix = XCreatePixmap(dpy, twin, (unsigned)w, (unsigned)h, depth);
 	mask = XCreatePixmap(dpy, twin, (unsigned)w, (unsigned)h, 1);
 	if (pgc == None)
@@ -285,11 +295,15 @@ stext_show(const struct show_req *req)
 void
 stext_hide(void)
 {
-	if (tmapped) {
-		XUnmapWindow(dpy, twin);
-		tmapped = 0;
-		XSync(dpy, False);
-	}
+	/*
+	 * Destroy rather than unmap: a later -t must not remap a
+	 * compositor-cached frame, and must not free a pixmap that is
+	 * still installed as the window background (seen as corrupt
+	 * glyphs on stext_01 after coexist_01 in tests/run -d).
+	 */
+	if (tmapped || twin != 0)
+		stext_drop_window();
+	XSync(dpy, False);
 }
 
 void
