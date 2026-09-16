@@ -132,6 +132,13 @@ class Canvas:
 		rgba = self.rgba
 		if a <= 0:
 			return
+		# Opaque src replaces dest (same as the formula below with a=255).
+		if a >= 255:
+			rgba[i] = cr
+			rgba[i + 1] = cg
+			rgba[i + 2] = cb
+			rgba[i + 3] = 255
+			return
 		oa = rgba[i + 3]
 		na = min(255, a + oa * (255 - a) // 255)
 		if na == 0:
@@ -149,19 +156,59 @@ class Canvas:
 		ss = self.ss
 		x, y, r = x * ss, y * ss, r * ss
 		cr, cg, cb, ca = color
+		if ca <= 0 or r <= 0:
+			return
+		rgba = self.rgba
+		w = self.w
 		x0 = int(math.floor(x - r - 1))
 		x1 = int(math.ceil(x + r + 1))
 		y0 = int(math.floor(y - r - 1))
 		y1 = int(math.ceil(y + r + 1))
-		for ny in range(max(0, y0), min(self.h, y1 + 1)):
-			for nx in range(max(0, x0), min(self.w, x1 + 1)):
-				dist = math.hypot(nx - x, ny - y)
-				if dist > r:
+		# dist > r  <=>  d2 > r*r; dist <= r-1  <=>  d2 <= (r-1)^2.
+		# hypot only on the 1px AA ring.  Opaque overwrite is the
+		# a=255 case of _blend; restamping an already-opaque pixel
+		# of the same color is a no-op (line stamps overlap heavily).
+		r2 = r * r
+		inner = r - 1.0
+		inner2 = inner * inner if inner > 0.0 else -1.0
+		xmin = max(0, x0)
+		xmax = min(w, x1 + 1)
+		ymin = max(0, y0)
+		ymax = min(self.h, y1 + 1)
+		hypot = math.hypot
+		for ny in range(ymin, ymax):
+			dy = ny - y
+			dy2 = dy * dy
+			row = ny * w
+			for nx in range(xmin, xmax):
+				dx = nx - x
+				d2 = dx * dx + dy2
+				if d2 > r2:
 					continue
-				cov = 1.0 if dist <= r - 1.0 else \
-				    max(0.0, r - dist)
-				self._blend((ny * self.w + nx) * 4,
-				    cr, cg, cb, int(ca * cov))
+				if d2 <= inner2:
+					a = ca
+				else:
+					dist = hypot(dx, dy)
+					if dist > r:
+						continue
+					cov = 1.0 if dist <= inner else \
+					    max(0.0, r - dist)
+					a = int(ca * cov)
+				if a <= 0:
+					continue
+				i = (row + nx) * 4
+				if a >= 255:
+					if (rgba[i] == cr and
+					    rgba[i + 1] == cg and
+					    rgba[i + 2] == cb and
+					    rgba[i + 3] == 255):
+						continue
+					rgba[i] = cr
+					rgba[i + 1] = cg
+					rgba[i + 2] = cb
+					rgba[i + 3] = 255
+					continue
+				self._blend(i, cr, cg, cb, a)
 
 	disc = stamp
 
@@ -169,19 +216,40 @@ class Canvas:
 		"""Erase an antialiased disc (cut a hole)."""
 		ss = self.ss
 		x, y, r = x * ss, y * ss, r * ss
+		if r <= 0:
+			return
 		rgba = self.rgba
+		w = self.w
 		x0 = int(math.floor(x - r - 1))
 		x1 = int(math.ceil(x + r + 1))
 		y0 = int(math.floor(y - r - 1))
 		y1 = int(math.ceil(y + r + 1))
-		for ny in range(max(0, y0), min(self.h, y1 + 1)):
-			for nx in range(max(0, x0), min(self.w, x1 + 1)):
-				dist = math.hypot(nx - x, ny - y)
-				if dist > r:
+		r2 = r * r
+		inner = r - 1.0
+		inner2 = inner * inner if inner > 0.0 else -1.0
+		xmin = max(0, x0)
+		xmax = min(w, x1 + 1)
+		ymin = max(0, y0)
+		ymax = min(self.h, y1 + 1)
+		hypot = math.hypot
+		for ny in range(ymin, ymax):
+			dy = ny - y
+			dy2 = dy * dy
+			row = ny * w
+			for nx in range(xmin, xmax):
+				dx = nx - x
+				d2 = dx * dx + dy2
+				if d2 > r2:
 					continue
-				cov = 1.0 if dist <= r - 1.0 else \
-				    max(0.0, r - dist)
-				i = (ny * self.w + nx) * 4 + 3
+				if d2 <= inner2:
+					cov = 1.0
+				else:
+					dist = hypot(dx, dy)
+					if dist > r:
+						continue
+					cov = 1.0 if dist <= inner else \
+					    max(0.0, r - dist)
+				i = (row + nx) * 4 + 3
 				rgba[i] = int(rgba[i] * (1.0 - cov))
 
 	def line(self, x0, y0, x1, y1, r, color=WHITE):

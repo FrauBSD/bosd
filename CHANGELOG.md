@@ -8,6 +8,7 @@ the repository for 1.0).
 
 - Add CHANGELOG.md
 - Add 17 new example PNGs (created by 6 new python examples)
+- Optimize example PNG generation performance
 
 ## 10.3 (2026-09-13)
 
