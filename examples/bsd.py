@@ -61,9 +61,9 @@ def ring(outer, inner):
 def letter_b(x):
 	"""Stem with two bowls; the upper is narrower and shallower."""
 	stem = x + STROKE
-	upper_w = 136		# upper bowl is one stroke narrower
+	upper_w = 136	# upper bowl is one stroke narrower
 	waist = 92		# top of the crossbar
-	shoulder = 48		# outer radius of the bowl corners
+	shoulder = 48	# outer radius of the bowl corners
 	crown = 44		# top-left corner of the stem
 	foot = 10		# bottom-left corner of the stem
 	ease = 4		# slight softening where counters meet the stem
@@ -91,10 +91,10 @@ def letter_s(x):
 	"""Two stadium hooks joined by a 30 degree spine; round terminals."""
 	half = STROKE / 2
 	upper_w = 120		# upper hook is narrower than the lower
-	inset = 8		# lower terminal sits inboard of the upper hook
+	inset = 8		    # lower terminal sits inboard of the upper hook
 	hook = 48 - half	# centerline radius of the hook corners
 	turn = 40 - half	# tighter corners at the terminals
-	sweep = 48		# centerline radius easing into the spine
+	sweep = 48	    	# centerline radius easing into the spine
 	slope = PI / 6		# spine angle from horizontal
 	overrun = PI / 15	# upper terminal runs past level before its cap
 	# Centerline x of each vertical run.
@@ -123,7 +123,7 @@ def letter_s(x):
 def letter_d(x):
 	"""Stem and one wide bowl."""
 	stem = x + STROKE
-	shoulder = 88		# outer radius of the bowl corners
+	shoulder = 88	# outer radius of the bowl corners
 	crown = 24		# top-left corner of the stem
 	foot = 12		# bottom-left corner of the stem
 	ease = 8		# softening where the counter meets the stem

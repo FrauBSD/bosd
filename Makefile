@@ -76,7 +76,7 @@ bosd.pc: Makefile
 	    'Cflags: -I$${includedir}' \
 	    > bosd.pc
 
-install: all example
+install: all examples/bsd.png
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
 		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
 		${DESTDIR}${MAN3DIR} ${DESTDIR}${ICONDIR} \
@@ -92,7 +92,9 @@ install: all example
 		${DESTDIR}${MAN3DIR}/bosd.3.gz
 	install -m 444 bosd.pc ${DESTDIR}${PKGCONFIGDIR}/bosd.pc
 	install -m 444 examples/bsd.png ${DESTDIR}${ICONDIR}/
-	install -m 444 examples/bsd.py tools/glyph.py \
+	install -m 444 examples/bsd.py examples/airplane.py \
+		examples/audio.py examples/auto-rotate.py examples/lid.py \
+		examples/mirror.py examples/tile.py tools/glyph.py \
 		${DESTDIR}${EXAMPLEDIR}/
 	install -m 444 README.md ${DESTDIR}${DOCDIR}/
 .if ${INSTALL_TESTS} == yes
@@ -101,14 +103,49 @@ install: all example
 	install -m 555 tests/*.sh ${DESTDIR}${TESTDIR}/
 .endif
 
-example: examples/bsd.png
+EXAMPLE_PNGS=	examples/bsd.png \
+		examples/airplane-on.png examples/airplane-off.png \
+		examples/audio-speakers.png examples/audio-headphones.png \
+		examples/auto-rotate-on.png examples/auto-rotate-off.png \
+		examples/lid-awake.png examples/lid-s0ix.png \
+		examples/mirror-on.png examples/mirror-off.png \
+		examples/mirror-none.png examples/mirror-extend.png \
+		examples/mirror-extend-none.png \
+		examples/tile-on.png examples/tile-float.png
+
+example: ${EXAMPLE_PNGS}
 
 examples/bsd.png: examples/bsd.py tools/glyph.py
 	${PYTHON} examples/bsd.py examples/bsd.png
 
+examples/airplane-on.png examples/airplane-off.png: \
+		examples/airplane.py tools/glyph.py
+	${PYTHON} examples/airplane.py examples
+
+examples/audio-speakers.png examples/audio-headphones.png: \
+		examples/audio.py tools/glyph.py
+	${PYTHON} examples/audio.py examples
+
+examples/auto-rotate-on.png examples/auto-rotate-off.png: \
+		examples/auto-rotate.py tools/glyph.py
+	${PYTHON} examples/auto-rotate.py examples
+
+examples/lid-awake.png examples/lid-s0ix.png: \
+		examples/lid.py tools/glyph.py
+	${PYTHON} examples/lid.py examples
+
+examples/mirror-on.png examples/mirror-off.png examples/mirror-none.png \
+		examples/mirror-extend.png examples/mirror-extend-none.png: \
+		examples/mirror.py tools/glyph.py
+	${PYTHON} examples/mirror.py examples
+
+examples/tile-on.png examples/tile-float.png: \
+		examples/tile.py tools/glyph.py
+	${PYTHON} examples/tile.py examples
+
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
-		${MAN} examples/bsd.png
+		${MAN} ${EXAMPLE_PNGS}
 	rm -rf tools/__pycache__ examples/__pycache__
 
 #
