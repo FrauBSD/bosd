@@ -7,6 +7,7 @@ the repository for 1.0).
 ## 10.3 (2026-09-15)
 
 - Add CHANGELOG.md
+- Add 17 new example PNGs (created by 6 new python examples)
 
 ## 10.3 (2026-09-13)
 
