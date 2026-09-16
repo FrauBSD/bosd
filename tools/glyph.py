@@ -5,10 +5,11 @@
 
 One canonical home for the drawing plumbing every `*-icons-build`
 script previously carried its own copy of: an RGBA canvas with
-optional supersampling, an antialiased disc brush and the strokes
-built from it, convex polygon fill, a path fill (even-odd or nonzero)
-for outlines with counters, and the PNG encoder.  Art scripts import
-this module and keep only their geometry.
+optional supersampling, an antialiased disc brush, stadium strokes
+(one path fill per segment), convex polygon fill, a path fill
+(even-odd or nonzero) for outlines with counters, and the PNG
+encoder.  Art scripts import this module and keep only their
+geometry.
 
 Coordinates are logical canvas units regardless of supersampling.
 Stdlib only.
@@ -167,7 +168,7 @@ class Canvas:
 		# dist > r  <=>  d2 > r*r; dist <= r-1  <=>  d2 <= (r-1)^2.
 		# hypot only on the 1px AA ring.  Opaque overwrite is the
 		# a=255 case of _blend; restamping an already-opaque pixel
-		# of the same color is a no-op (line stamps overlap heavily).
+		# of the same color is a no-op.
 		r2 = r * r
 		inner = r - 1.0
 		inner2 = inner * inner if inner > 0.0 else -1.0
@@ -253,12 +254,14 @@ class Canvas:
 				rgba[i] = int(rgba[i] * (1.0 - cov))
 
 	def line(self, x0, y0, x1, y1, r, color=WHITE):
-		steps = max(1, int(math.hypot(x1 - x0, y1 - y0) *
-		    self.ss * 2))
-		for i in range(steps + 1):
-			t = i / steps
-			self.stamp(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t,
-			    r, color)
+		"""Stroke a stadium (round-capped segment) in one path fill."""
+		if r <= 0:
+			return
+		if math.hypot(x1 - x0, y1 - y0) < 1e-6:
+			self.stamp(x0, y0, r, color)
+			return
+		self.fill_path([outline(((x0, y0), (x1, y1)), r * 2.0,
+		    caps="round")], color)
 
 	def polyline(self, pts, r, color=WHITE, closed=False):
 		n = len(pts)
@@ -273,13 +276,28 @@ class Canvas:
 		"""Stroke an arc (radians); elliptical when ry is given."""
 		if ry is None:
 			ry = rx
-		for i in range(steps + 1):
-			a = a0 + (a1 - a0) * i / steps
-			self.stamp(cx + rx * math.cos(a),
-			    cy + ry * math.sin(a), r, color)
+		if r <= 0:
+			return
+		span = abs(a1 - a0)
+		n = max(2, steps, int(span * max(rx, ry, 1.0) / 2.0))
+		pts = [(cx + rx * math.cos(a0 + (a1 - a0) * i / n),
+		    cy + ry * math.sin(a0 + (a1 - a0) * i / n))
+		    for i in range(n + 1)]
+		self.fill_path([outline(pts, r * 2.0, caps="round")], color)
 
 	def circle(self, cx, cy, rad, r, color=WHITE):
-		self.arc(cx, cy, rad, 0.0, 2.0 * math.pi, r, color)
+		"""Stroke a circle; a solid disc when the hole would vanish."""
+		if r <= 0:
+			return
+		if rad <= 0:
+			self.stamp(cx, cy, r, color)
+			return
+		inner = rad - r
+		if inner <= 0:
+			self.stamp(cx, cy, rad + r, color)
+			return
+		self.fill_path((arc_pts(cx, cy, rad + r, 0.0, 2.0 * math.pi),
+		    arc_pts(cx, cy, inner, 0.0, 2.0 * math.pi)), color)
 
 	def rect_stroke(self, x, y, w, h, r, color=WHITE):
 		self.polyline(((x, y), (x + w, y), (x + w, y + h),
@@ -338,13 +356,12 @@ class Canvas:
 					    cr, cg, cb, ca * hits // 4)
 
 	def fill_round_rect(self, x0, y0, x1, y1, rad, color=WHITE):
-		self.fill_poly(((x0 + rad, y0), (x1 - rad, y0),
-		    (x1 - rad, y1), (x0 + rad, y1)), color)
-		self.fill_poly(((x0, y0 + rad), (x1, y0 + rad),
-		    (x1, y1 - rad), (x0, y1 - rad)), color)
-		for cx, cy in ((x0 + rad, y0 + rad), (x1 - rad, y0 + rad),
-		    (x1 - rad, y1 - rad), (x0 + rad, y1 - rad)):
-			self.stamp(cx, cy, rad, color)
+		if rad <= 0:
+			self.fill_poly(((x0, y0), (x1, y0), (x1, y1),
+			    (x0, y1)), color)
+			return
+		self.fill_path([round_rect_pts(x0, y0, x1, y1,
+		    (rad, rad, rad, rad))], color)
 
 	def fill_path(self, rings, color=WHITE, sub=4, rule="evenodd"):
 		"""Fill closed polylines as one shape; holes are more rings.

@@ -4,11 +4,12 @@ Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
 
-## 10.3 (2026-09-15)
+## 10.4 (2026-09-15)
 
 - Add CHANGELOG.md
 - Add 17 new example PNGs (created by 6 new python examples)
 - Optimize example PNG generation performance
+- Implement stadium stroke optimization for PNG generation
 
 ## 10.3 (2026-09-13)
 
