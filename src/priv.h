@@ -47,6 +47,7 @@ extern int	 mapped;
 extern int	 win_w, win_h;
 extern int	 icon_ox, icon_oy;
 
+void	 refresh_screen_geom(void);
 int	 init_display(void);
 int	 layout_fullscreen(void);
 void	 raise_overlay(void);

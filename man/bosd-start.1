@@ -1,0 +1,129 @@
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+.\"
+.Dd September 29, 2026
+.Dt BOSD-START 1
+.Os
+.Sh NAME
+.Nm bosd-start
+.Nd start the default bosd daemon
+.Sh SYNOPSIS
+.Nm
+.Sh DESCRIPTION
+.Xr bosd 1
+paints a glyph, a gauge, or a caption with or without a daemon.
+With no daemon listening, it paints the request in its own window
+and exits when the hold elapses.
+That is a complete show.
+.Pp
+A daemon,
+.Nm bosd
+with
+.Fl d ,
+keeps one overlay for the instance and repaints it in place.
+A gauge, a glyph, and a small caption each run on their own timer,
+so they can share the screen, and a later request replaces its own
+slot.
+The client sends the request and returns.
+Key repeat updates the window already up.
+.Pp
+.Nm
+starts that daemon for the default instance.
+.Nm bosd
+with
+.Fl d
+stays in the foreground.
+A startup script that wants it has to background it, and the shell
+returns when the process has been forked, before the request socket
+exists.
+.Nm
+backgrounds
+.Nm bosd
+and returns when the socket is there, so the first client of the
+session finds a daemon.
+.Pp
+Call
+.Nm
+from each place a session can start: a window manager
+.Ic StartFunction ,
+an XDG autostart entry, and the login greeter.
+Those paths are separate, and any of them may run first.
+When the default daemon is already running, and its executable is
+the one
+.Nm
+resolved on
+.Ev PATH ,
+the call returns.
+.Pp
+The same job dropped into a window manager rc looks like
+.Bd -literal -offset indent
+bosd -d &
+.Ed
+.Pp
+That line runs when that window manager starts.
+It returns before the socket exists, so an early client paints on
+its own and exits.
+A second start contends for the socket the first daemon holds.
+.Nm
+is safe to run from each startup path, and it returns after the
+socket is ready.
+.Pp
+When the recorded pid is running some other binary, that process is
+stopped and a new daemon is started.
+Installing a new
+.Nm bosd
+leaves the process mapped from the old file.
+The next
+.Nm
+is what puts the new binary on the socket.
+.Pp
+A named channel
+.Po
+.Nm bosd
+.Fl n Ar instance
+.Pc
+is started by whoever uses that channel.
+.Nm
+starts the default instance.
+.Pp
+When
+.Ev BOSD_PATH
+is unset and
+.Pa ~/theme/osd
+exists, the daemon is given that directory.
+Otherwise
+.Nm bosd
+uses the icon directory it was built with.
+.Sh ENVIRONMENT
+.Bl -tag -width "BOSD_PATH"
+.It Ev BOSD_PATH
+Colon-separated icon search path handed to the daemon.
+When unset,
+.Pa ~/theme/osd
+is used if that directory exists.
+.It Ev DISPLAY
+X11 display.
+The default is
+.Pa :0 .
+.It Ev HOME
+Used to find
+.Pa ~/theme/osd
+when
+.Ev BOSD_PATH
+is unset.
+.El
+.Sh FILES
+.Bl -tag -width "/tmp/bosd.default.uid.sock" -compact
+.It Pa /tmp/bosd.default. Ns Ar uid Ns Pa .sock
+request socket of the default instance
+.It Pa /tmp/bosd.default. Ns Ar uid Ns Pa .pid
+daemon pid
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh SEE ALSO
+.Xr bosd 1
+.Sh AUTHORS
+.An Devin Teske Aq Mt dteske@FreeBSD.org

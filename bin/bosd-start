@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# One bosd for this uid on this DISPLAY.
+#
+# Default instance only. A live pid whose binary is the bosd this
+# script would start is left alone. bosd -d stays in the foreground,
+# so this backgrounds it.
+#
+
+pgm=bosd-start
+uid=$( id -u )
+sock=/tmp/bosd.default.$uid.sock
+pidf=/tmp/bosd.default.$uid.pid
+
+export DISPLAY="${DISPLAY:-:0}"
+if [ ! "$BOSD_PATH" ] && [ -d "${HOME:-}/theme/osd" ]; then
+	export BOSD_PATH="$HOME/theme/osd"
+fi
+
+bosd_bin=$( command -v bosd 2> /dev/null ) || bosd_bin=
+if [ ! -x "$bosd_bin" ]; then
+	echo "$pgm: bosd not found" >&2
+	exit 1
+fi
+
+if [ -S "$sock" ] && [ -f "$pidf" ]; then
+	_pid=$( cat "$pidf" 2> /dev/null ) || _pid=
+	if [ "$_pid" ] && kill -0 "$_pid" 2> /dev/null; then
+		_exe=$( procstat -b "$_pid" 2> /dev/null |
+			awk 'NR > 1 { print $NF; exit }' )
+		if [ "$_exe" = "$bosd_bin" ] || [ ! "$_exe" ]; then
+			exit 0
+		fi
+		kill "$_pid" 2> /dev/null || : stale bosd
+		_i=0
+		while [ "$_i" -lt 20 ] && kill -0 "$_pid" 2> /dev/null; do
+			sleep 0.05
+			_i=$(( $_i + 1 ))
+		done
+		rm -f "$sock" "$pidf"
+	fi
+fi
+
+"$bosd_bin" -d > /dev/null 2>&1 &
+_i=0
+while [ "$_i" -lt 40 ]; do
+	[ -S "$sock" ] && exit 0
+	sleep 0.05
+	_i=$(( $_i + 1 ))
+done
+echo "$pgm: bosd did not become ready" >&2
+exit 1

@@ -4,6 +4,12 @@ Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
 
+## 10.5 (2026-09-29)
+
+- Re-read the primary output before each show
+- Reset the gauge watermark when previous equals current
+- Install bosd-start and its manual
+
 ## 10.4 (2026-09-15)
 
 - Add CHANGELOG.md

@@ -256,6 +256,15 @@ drain_socket(int sockfd)
 		if (!was) {
 			b_held_prev = breq.gauge_prev;
 			b_held_hold = breq.gauge_hold;
+		} else if (breq.gauge_prev >= 0 &&
+		    breq.gauge_prev == breq.gauge) {
+			/*
+			 * A show with previous equal to current (output
+			 * switch, mute) resets the watermark. A hold keeps
+			 * sending the original -P, which is not equal to
+			 * the new -g, so the latch stays.
+			 */
+			b_held_prev = breq.gauge_prev;
 		}
 		breq.gauge_prev = b_held_prev;
 		breq.gauge_hold = b_held_hold;

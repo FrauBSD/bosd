@@ -42,7 +42,7 @@ pack_argb32(unsigned char r, unsigned char g, unsigned char b,
  * Center on the primary output; fall back to the first connected
  * internal panel (eDP/LVDS/DSI), then the whole X screen.
  */
-static void
+void
 refresh_screen_geom(void)
 {
 	Window root;
@@ -171,6 +171,7 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	int pad_left, pad_right, pad_top, pad_bot;
 	int blen, w, h, x, y, cap_w, cw, ch;
 
+	refresh_screen_geom();
 	blen = (int)strlen(req->badge);
 	pad_left = icon_px / 12;
 	pad_bot = icon_px / 12;
@@ -257,6 +258,7 @@ layout_window(const struct icon *ic, const struct show_req *req)
 int
 layout_fullscreen(void)
 {
+	refresh_screen_geom();
 	icon_ox = 0;
 	icon_oy = 0;
 	return (place_window(scr_x, scr_y, scr_w, scr_h));

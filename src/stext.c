@@ -171,6 +171,7 @@ stext_show(const struct show_req *req)
 	Visual *vis;
 	Colormap cm;
 
+	refresh_screen_geom();
 	clamp_paint_alphas(req, &fill_a, &out_a);
 	/*
 	 * Real translucency needs ARGB.  -o alone stays on the shaped

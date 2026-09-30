@@ -198,6 +198,7 @@ bar_show(const struct show_req *req)
 	 * size that face, not the gauge labels).  -s always scales
 	 * the bar's panel-derived tick geometry.
 	 */
+	refresh_screen_geom();
 	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
 	    !req->small;
 	bar_geom_set_scale(req->scale);

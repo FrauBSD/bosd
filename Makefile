@@ -76,22 +76,35 @@ bosd.pc: Makefile
 	    'Cflags: -I$${includedir}' \
 	    > bosd.pc
 
-install: all examples/bsd.png
+EXAMPLE_PNGS=	examples/bsd.png \
+		examples/airplane-on.png examples/airplane-off.png \
+		examples/audio-speakers.png examples/audio-headphones.png \
+		examples/auto-rotate-on.png examples/auto-rotate-off.png \
+		examples/lid-awake.png examples/lid-s0ix.png \
+		examples/mirror-on.png examples/mirror-off.png \
+		examples/mirror-none.png examples/mirror-extend.png \
+		examples/mirror-extend-none.png \
+		examples/tile-on.png examples/tile-float.png
+
+install: all ${EXAMPLE_PNGS}
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
 		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
 		${DESTDIR}${MAN3DIR} ${DESTDIR}${ICONDIR} \
 		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${DOCDIR} \
 		${DESTDIR}${PKGCONFIGDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
+	install -m 555 bin/bosd-start ${DESTDIR}${BINDIR}/bosd-start
 	install -m 555 ${SHLIB} ${DESTDIR}${LIBDIR}/${SHLIB}
 	ln -sf ${SHLIB} ${DESTDIR}${LIBDIR}/libbosd.so
 	install -m 444 include/bosd.h ${DESTDIR}${INCLUDEDIR}/bosd.h
 	gzip -cn ${MAN} > ${DESTDIR}${MANDIR}/bosd.1.gz
+	gzip -cn man/bosd-start.1 > ${DESTDIR}${MANDIR}/bosd-start.1.gz
 	gzip -cn ${MAN3} > ${DESTDIR}${MAN3DIR}/bosd.3.gz
 	chmod 444 ${DESTDIR}${MANDIR}/bosd.1.gz \
+		${DESTDIR}${MANDIR}/bosd-start.1.gz \
 		${DESTDIR}${MAN3DIR}/bosd.3.gz
 	install -m 444 bosd.pc ${DESTDIR}${PKGCONFIGDIR}/bosd.pc
-	install -m 444 examples/bsd.png ${DESTDIR}${ICONDIR}/
+	install -m 444 ${EXAMPLE_PNGS} ${DESTDIR}${ICONDIR}/
 	install -m 444 examples/bsd.py examples/airplane.py \
 		examples/audio.py examples/auto-rotate.py examples/lid.py \
 		examples/mirror.py examples/tile.py tools/glyph.py \
@@ -102,16 +115,6 @@ install: all examples/bsd.png
 	install -m 555 tests/run ${DESTDIR}${TESTDIR}/
 	install -m 555 tests/*.sh ${DESTDIR}${TESTDIR}/
 .endif
-
-EXAMPLE_PNGS=	examples/bsd.png \
-		examples/airplane-on.png examples/airplane-off.png \
-		examples/audio-speakers.png examples/audio-headphones.png \
-		examples/auto-rotate-on.png examples/auto-rotate-off.png \
-		examples/lid-awake.png examples/lid-s0ix.png \
-		examples/mirror-on.png examples/mirror-off.png \
-		examples/mirror-none.png examples/mirror-extend.png \
-		examples/mirror-extend-none.png \
-		examples/tile-on.png examples/tile-float.png
 
 example: ${EXAMPLE_PNGS}
 
