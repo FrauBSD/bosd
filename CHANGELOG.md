@@ -4,6 +4,10 @@ Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
 
+## 10.5.1 (2026-10-17)
+
+- Fixup .Pq macros in bosd(1) and bosd(3)
+
 ## 10.5 (2026-09-29)
 
 - Re-read the primary output before each show

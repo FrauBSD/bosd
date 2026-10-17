@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd September 8, 2026
+.Dd October 17, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -94,8 +94,11 @@ gauge, a glyph, and a caption can be up at once: a new gauge
 replaces the gauge, new artwork replaces the artwork, a new
 .Fl t
 replaces the caption, and none clears the others
-.Pq unless Fl C is given with the new request, which clears every
-slot first .
+.Po
+unless
+.Fl C
+is given with the new request, which clears every slot first
+.Pc .
 A warm daemon keeps them on screen and repaints in place, so
 rapid key repeats never flash.
 .Pp
@@ -119,10 +122,17 @@ stays at its
 opacity while the glyph's alpha channel is remapped so its peak
 becomes
 .Ar opacity
-.Pq soft edges scale with it: an 80% file with Fl A Li 0.5 peaks at
-50%, with Fl A Li 0.9 at 90%, with Fl A Li 1 fully opaque;
+.Po
+soft edges scale with it: an 80% file with
+.Fl A Li 0.5
+peaks at 50%, with
+.Fl A Li 0.9
+at 90%, with
+.Fl A Li 1
+fully opaque;
 .Fl A Li 0
-leaves an outline with an invisible glyph .
+leaves an outline with an invisible glyph
+.Pc .
 On
 .Fl c
 or
@@ -168,7 +178,14 @@ glyph, digits, or text, e.g.
 .Dq airplane mode off
 under the airplane glyph.
 On a gauge alone
-.Pq Fl g with no icon, Fl c , Fl T , or Fl t ,
+.Po
+.Fl g
+with no icon,
+.Fl c ,
+.Fl T ,
+or
+.Fl t
+.Pc ,
 the same string is drawn in the overage label's face and size,
 centerline-aligned with the bar: at the overage seat when no
 overage is shown, or left-justified just past the overage text when
@@ -234,7 +251,10 @@ Count down from
 .Ar countdown
 to 1 in huge outlined digits on a full-panel overlay, one second
 per digit
-.Pq Ar hold_seconds overrides ,
+.Po
+.Ar hold_seconds
+overrides
+.Pc ,
 then exit.
 Replaces
 .Ar icon
@@ -295,14 +315,23 @@ On a gauge alone it colors
 .Fl a ,
 .Fl p ,
 and overage labels
-.Pq default the Fl G tick color .
+.Po
+default the
+.Fl G
+tick color
+.Pc .
 .It Fl f Ar font
 Select the typeface for text shows and badges via a fontconfig
 family
 .Pq or richer pattern fragment, e.g. Li DejaVu\ Sans .
 .Nm
 still chooses size and weight for each role
-.Pq bold tabular for Fl c / Fl T ,
+.Po
+bold tabular for
+.Fl c
+/
+.Fl T
+.Pc ,
 regular for
 .Fl b
 and icon captions, panel-scaled type for
@@ -311,14 +340,20 @@ and icon captions, panel-scaled type for
 Without
 .Fl f
 the built-in defaults remain
-.Pq DejaVu\ Sans for large text and badges; Fixed for Fl t and gauge bar labels .
+.Po
+DejaVu\ Sans for large text and badges; Fixed for
+.Fl t
+and gauge bar labels
+.Pc .
 Applies to
 .Fl c ,
 .Fl t ,
 .Fl T ,
 .Fl b ,
 and to
-.Fl a / Fl p
+.Fl a
+/
+.Fl p
 captions on an icon or on a gauge alone
 .Pq and to the gauge overage label .
 .It Fl G Ar color
@@ -343,7 +378,13 @@ itself with no library dependency
 .Pc .
 Above 100% the fill stays full and the percentage is written just
 past the bar's right edge
-.Pq Fixed face sized to the tick height, or Fl f when set; color follows Fl F when set, else the tick color .
+.Po
+Fixed face sized to the tick height, or
+.Fl f
+when set; color follows
+.Fl F
+when set, else the tick color
+.Pc .
 With
 .Fl P
 on a warm daemon, short ticks at or above the latched previous
@@ -352,7 +393,13 @@ the current fill and that watermark stay full color
 .Pq the return zone .
 Tall ticks are never dimmed.
 Alone it shows only the bar
-.Pq plus optional Fl p / Fl a labels ;
+.Po
+plus optional
+.Fl p
+/
+.Fl a
+labels
+.Pc ;
 alongside an
 .Ar icon ,
 .Fl c ,
@@ -376,7 +423,14 @@ Honors
 .Fl x ,
 and
 .Fl y
-.Pq Fl a , Fl F , Fl f , and Fl p only when the bar is shown alone;
+.Po
+.Fl a ,
+.Fl F ,
+.Fl f ,
+and
+.Fl p
+only when the bar is shown alone
+.Pc ;
 .Fl s
 scales the panel-derived tick size whenever the bar is shown .
 .Ar percent
@@ -532,7 +586,11 @@ as small caption lines: panel-scaled type
 .Pq 36px on a 1200-tall primary, times Fl s ,
 black-outlined, centered near the panel bottom and stacked above
 the gauge bar's band
-.Pq so a concurrent Fl g cannot cover it; clearance tracks the panel-scaled bar, times Fl s when shared ,
+.Po
+so a concurrent
+.Fl g
+cannot cover it; clearance tracks the panel-scaled bar, times Fl s when shared
+.Pc ,
 filled with the
 .Fl F
 color
