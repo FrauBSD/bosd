@@ -7,6 +7,7 @@ the repository for 1.0).
 ## 10.5.1 (2026-10-17)
 
 - Fixup .Pq macros in bosd(1) and bosd(3)
+- Add support for DATADIR/DOCSDIR
 
 ## 10.5 (2026-09-29)
 

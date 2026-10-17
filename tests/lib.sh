@@ -332,8 +332,8 @@ countdown_hold_arg()
 
 #
 # Icon operand for glyph tests.  Prefer the packaged name "bsd" when
-# share/bosd/bsd.png sits beside tests/ (ICONDIR).  Otherwise build or
-# reuse examples/bsd.png in a source tree
+# bsd.png sits beside tests/ (DATADIR).  Otherwise build or reuse
+# examples/bsd.png in a source tree
 #
 example_png()
 {

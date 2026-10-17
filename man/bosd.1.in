@@ -693,8 +693,10 @@ X11 display to draw on.
 request socket
 .It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .pid
 daemon pid
-.It Pa @PREFIX@/share/bosd
+.It Pa @DATADIR@
 default icon directory
+.It Pa @DOCSDIR@
+README and changelog
 .It Pa @PREFIX@/share/examples/bosd
 glyph authoring example
 .Pq Pa bsd.py

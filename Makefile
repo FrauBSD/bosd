@@ -5,12 +5,12 @@ BINDIR?=	${PREFIX}/bin
 LIBDIR?=	${PREFIX}/lib
 INCLUDEDIR?=	${PREFIX}/include
 SHAREDIR?=	${PREFIX}/share
-DOCDIR?=	${SHAREDIR}/doc/bosd
+DATADIR?=	${SHAREDIR}/bosd
+DOCSDIR?=	${SHAREDIR}/doc/bosd
 MANDIR?=	${SHAREDIR}/man/man1
 MAN3DIR?=	${SHAREDIR}/man/man3
-ICONDIR?=	${SHAREDIR}/bosd
 EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
-TESTDIR?=	${SHAREDIR}/bosd/tests
+TESTDIR?=	${DATADIR}/tests
 PKGCONFIGDIR?=	${LIBDIR}/pkgconfig
 PYTHON?=	python3
 INSTALL_TESTS?=	yes
@@ -22,7 +22,7 @@ PKG_CONFIG?=	pkg-config
 PKGS=		x11 xrandr xrender xext xft fontconfig libpng
 PKG_CFLAGS!=	${PKG_CONFIG} --cflags ${PKGS}
 PKG_LIBS!=	${PKG_CONFIG} --libs ${PKGS}
-CPPFLAGS+=	-Iinclude -DBOSD_ICONDIR='"${ICONDIR}"' ${PKG_CFLAGS}
+CPPFLAGS+=	-Iinclude -DBOSD_ICONDIR='"${DATADIR}"' ${PKG_CFLAGS}
 LDLIBS=		${PKG_LIBS}
 
 SHLIB_MAJOR=	4
@@ -60,7 +60,10 @@ ${LIBOBJS}: CFLAGS+= -fPIC
 ${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h
 
 ${MAN}: ${MANIN} Makefile
-	sed -e 's|@PREFIX@|${PREFIX}|g' ${MANIN} > ${MAN}
+	sed -e 's|@PREFIX@|${PREFIX}|g' \
+	    -e 's|@DATADIR@|${DATADIR}|g' \
+	    -e 's|@DOCSDIR@|${DOCSDIR}|g' \
+	    ${MANIN} > ${MAN}
 
 bosd.pc: Makefile
 	@printf '%s\n' \
@@ -89,8 +92,8 @@ EXAMPLE_PNGS=	examples/bsd.png \
 install: all ${EXAMPLE_PNGS}
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
 		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
-		${DESTDIR}${MAN3DIR} ${DESTDIR}${ICONDIR} \
-		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${DOCDIR} \
+		${DESTDIR}${MAN3DIR} ${DESTDIR}${DATADIR} \
+		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${DOCSDIR} \
 		${DESTDIR}${PKGCONFIGDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
 	install -m 555 bin/bosd-start ${DESTDIR}${BINDIR}/bosd-start
@@ -104,12 +107,12 @@ install: all ${EXAMPLE_PNGS}
 		${DESTDIR}${MANDIR}/bosd-start.1.gz \
 		${DESTDIR}${MAN3DIR}/bosd.3.gz
 	install -m 444 bosd.pc ${DESTDIR}${PKGCONFIGDIR}/bosd.pc
-	install -m 444 ${EXAMPLE_PNGS} ${DESTDIR}${ICONDIR}/
+	install -m 444 ${EXAMPLE_PNGS} ${DESTDIR}${DATADIR}/
 	install -m 444 examples/bsd.py examples/airplane.py \
 		examples/audio.py examples/auto-rotate.py examples/lid.py \
 		examples/mirror.py examples/tile.py tools/glyph.py \
 		${DESTDIR}${EXAMPLEDIR}/
-	install -m 444 README.md ${DESTDIR}${DOCDIR}/
+	install -m 444 README.md CHANGELOG.md ${DESTDIR}${DOCSDIR}/
 .if ${INSTALL_TESTS} == yes
 	install -d ${DESTDIR}${TESTDIR}
 	install -m 555 tests/run ${DESTDIR}${TESTDIR}/
