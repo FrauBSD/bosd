@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 17, 2026
+.Dd October 19, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -634,6 +634,8 @@ Shift the artwork horizontally by
 pixels from panel center: positive right, negative left.
 Placement semantics are those of
 .Fl y .
+.It Fl v
+Print the version and exit.
 .It Fl y Ar offset
 Shift the artwork vertically by
 .Ar offset
