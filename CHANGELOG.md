@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-22 09:57:14 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-22 09:59:50 -0700 Devin Teske $)
 
 # Changelog
 
@@ -10,6 +10,7 @@ the repository for 1.0).
 
 - Add examples/picom.conf
 - Add RCS tags
+- Refactor Makefile
 
 ## 10.5.2 (2026-10-19)
 

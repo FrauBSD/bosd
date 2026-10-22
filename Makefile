@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-10-22 09:57:14 -0700 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-10-22 09:59:50 -0700 Devin Teske $
 #
 ############################################################ OPTIONS
 PREFIX?=	/usr/local
@@ -47,7 +47,6 @@ PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
 		src/bar_geom.c src/bar_paint.c src/bar.c \
 		src/countdown.c src/stext_paint.c src/stext.c
 PROGOBJS=	${PROGSRCS:.c=.o}
-MANIN=		man/bosd.1.in
 MAN=		man/bosd.1
 MAN3=		man/bosd.3
 PICOMCONF=	examples/picom.conf
@@ -71,11 +70,11 @@ ${LIBOBJS}: CFLAGS+= -fPIC
 
 ${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h
 
-${MAN}: ${MANIN} Makefile
+${MAN}: ${MAN}.in Makefile
 	sed -e 's|@PREFIX@|${PREFIX}|g' \
 	    -e 's|@DATADIR@|${DATADIR}|g' \
 	    -e 's|@DOCSDIR@|${DOCSDIR}|g' \
-	    ${MANIN} > ${MAN}
+	    ${MAN}.in > ${MAN}
 
 ${PICOMCONF}: ${PICOMCONF}.in Makefile
 	sed -e 's|@PREFIX@|${PREFIX}|g' ${PICOMCONF}.in > ${PICOMCONF}
