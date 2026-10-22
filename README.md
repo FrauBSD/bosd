@@ -1,3 +1,5 @@
+[//]: # ($FrauBSD$)
+
 # bosd
 
 On-screen display engine for BSD desktops.

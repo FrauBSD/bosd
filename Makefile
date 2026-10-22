@@ -1,5 +1,16 @@
-# bosd - on-screen display engine
+############################################################ LICENSE
 #
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+#
+############################################################ IDENT(1)
+#
+# $Title: bosd - on-screen display engine $
+# $Copyright: 2026 Devin Teske. All rights reserved. $
+# $FrauBSD$
+#
+############################################################ OPTIONS
 PREFIX?=	/usr/local
 BINDIR?=	${PREFIX}/bin
 LIBDIR?=	${PREFIX}/lib

@@ -1,3 +1,5 @@
+# $FrauBSD$
+#
 # picom configuration for bosd.
 #
 # bosd paints override-redirect ARGB windows (the glyph, the gauge,

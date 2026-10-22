@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+############################################################ LICENSE
+#
+# Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+############################################################ IDENT(1)
+#
+# $Title: Make lid-policy PNG glyphs $
+# $Copyright: 2026 Devin Teske. All rights reserved. $
+# $FrauBSD$
+#
 ############################################################ DOCSTRING
 
 """Lid-policy OSD glyphs: filled white solids.

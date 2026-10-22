@@ -1,3 +1,5 @@
+[//]: # ($FrauBSD$)
+
 # Changelog
 
 Newest first. Each section is a git tag; the bullets are the commits
@@ -7,6 +9,7 @@ the repository for 1.0).
 ## 10.6 (2026-10-22)
 
 - Add examples/picom.conf
+- Add RCS tags
 
 ## 10.5.2 (2026-10-19)
 

@@ -1,4 +1,17 @@
 #!/bin/sh
+############################################################ LICENSE
+#
+# Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+############################################################ IDENT(1)
+#
+# $Title: Start bosd for an X session $
+# $Copyright: 2026 Devin Teske. All rights reserved. $
+# $FrauBSD$
+#
+############################################################ INFORMATION
 #
 # One bosd for this uid on this DISPLAY.
 #
@@ -6,6 +19,7 @@
 # script would start is left alone. bosd -d stays in the foreground,
 # so this backgrounds it.
 #
+############################################################ MAIN
 
 pgm=bosd-start
 uid=$( id -u )

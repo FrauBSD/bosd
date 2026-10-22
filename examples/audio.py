@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+############################################################ LICENSE
+#
+# Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+############################################################ IDENT(1)
+#
+# $Title: Make audio output device PNG glyphs $
+# $Copyright: 2026 Devin Teske. All rights reserved. $
+# $FrauBSD$
+#
 ############################################################ DOCSTRING
 
 """Audio OSD glyphs: white strokes on a transparent ground.
