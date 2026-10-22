@@ -1,0 +1,23 @@
+# $FrauBSD: bosd/.git-hooks/README 2026-10-22 09:55:10 -0700 Devin Teske $
+
+!! ATTENTION DEVELOPERS AND CONTRIBUTORS !!
+
+To get RCS Keywords (like the FrauBSD one at the top of this file) to expand,
+follow these steps before using `git commit' in this project:
+
+   $ .git-hooks/install.sh
+
+Cheers!
+
+Supported keywords:
+
+	$Author: Devin Teske $
+	$Branch: main $
+	$Date: 2026-10-22 09:55:10 -0700 $
+	$Header: .git-hooks/README 2026-10-22 09:55:10 -0700 Devin Teske $
+	$Origin: git@github.com:FrauBSD/bosd.git $
+	$Project: FrauBSD/bosd.git $
+	$RCSfile: README $
+	$Source: .git-hooks/README $
+	$FrauBSD: bosd/.git-hooks/README 2026-10-22 09:55:10 -0700 Devin Teske $
+
