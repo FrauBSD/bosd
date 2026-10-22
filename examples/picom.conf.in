@@ -1,0 +1,31 @@
+# picom configuration for bosd.
+#
+# bosd paints override-redirect ARGB windows (the glyph, the gauge,
+# the caption). The configuration picom loads by default turns
+# client-side shadows on, and that shadow follows the window
+# rectangle, which reads as a border around the artwork.
+#
+# This file keeps shadows on ordinary windows and turns them off for
+# override-redirect windows. That covers bosd, and menus that are
+# drawn the same way.
+#
+# picom does not load this on its own. From ~/.xsession (i3, dwm, and
+# the like):
+#
+#     picom --config @PREFIX@/share/examples/bosd/picom.conf -b
+#
+# The path is also in bosd(1) FILES. --config replaces picom's own
+# file; copy the rule below into an existing picom.conf if you
+# already have one.
+
+shadow = true;
+backend = "xrender";
+
+rules: ({
+  match = "override_redirect = true";
+  shadow = false;
+  full-shadow = false;
+  fade = false;
+  opacity = 1.0;
+  dim = 0.0;
+});

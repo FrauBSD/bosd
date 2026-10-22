@@ -4,6 +4,10 @@ Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
 
+## 10.6 (2026-10-22)
+
+- Add examples/picom.conf
+
 ## 10.5.2 (2026-10-19)
 
 - Document -v in bosd(1)

@@ -39,8 +39,9 @@ PROGOBJS=	${PROGSRCS:.c=.o}
 MANIN=		man/bosd.1.in
 MAN=		man/bosd.1
 MAN3=		man/bosd.3
+PICOMCONF=	examples/picom.conf
 
-all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN}
+all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN} ${PICOMCONF}
 
 ${SHLIB}: ${LIBOBJS}
 	${CC} -shared -Wl,-soname,${SHLIB} -o ${SHLIB} ${LIBOBJS}
@@ -64,6 +65,9 @@ ${MAN}: ${MANIN} Makefile
 	    -e 's|@DATADIR@|${DATADIR}|g' \
 	    -e 's|@DOCSDIR@|${DOCSDIR}|g' \
 	    ${MANIN} > ${MAN}
+
+${PICOMCONF}: ${PICOMCONF}.in Makefile
+	sed -e 's|@PREFIX@|${PREFIX}|g' ${PICOMCONF}.in > ${PICOMCONF}
 
 bosd.pc: Makefile
 	@printf '%s\n' \
@@ -111,6 +115,7 @@ install: all ${EXAMPLE_PNGS}
 	install -m 444 examples/bsd.py examples/airplane.py \
 		examples/audio.py examples/auto-rotate.py examples/lid.py \
 		examples/mirror.py examples/tile.py tools/glyph.py \
+		${PICOMCONF} \
 		${DESTDIR}${EXAMPLEDIR}/
 	install -m 444 README.md CHANGELOG.md ${DESTDIR}${DOCSDIR}/
 .if ${INSTALL_TESTS} == yes
@@ -151,7 +156,7 @@ examples/tile-on.png examples/tile-float.png: \
 
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
-		${MAN} ${EXAMPLE_PNGS}
+		${MAN} ${PICOMCONF} ${EXAMPLE_PNGS}
 	rm -rf tools/__pycache__ examples/__pycache__
 
 #

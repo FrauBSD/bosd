@@ -20,7 +20,10 @@ Home: [FrauBSD/bosd](https://github.com/FrauBSD/bosd)
 
 - X11 (Xrandr, Xrender, Xext shape), Xft + fontconfig, libpng
   (daemon / `bosd` binary only)
-- A compositor (e.g. picom) for translucency; opaque without one
+- A compositor (e.g. picom) for translucency; opaque without one.
+  `share/examples/bosd/picom.conf` keeps picom from shadowing the
+  OSD. From `~/.xsession`:
+  `picom --config /usr/local/share/examples/bosd/picom.conf -b`
 - Python 3 (stdlib only) to author glyphs with `tools/glyph.py`
 - C clients need only `libbosd` (no X11 link)
 

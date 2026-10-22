@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 19, 2026
+.Dd October 20, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -704,6 +704,12 @@ glyph authoring example
 .Pq Pa bsd.py
 and the shared rasterizer
 .Pq Pa glyph.py
+.It Pa @PREFIX@/share/examples/bosd/picom.conf
+.Xr picom 1
+configuration that leaves shadows on ordinary windows and turns
+them off for the override-redirect windows
+.Nm
+draws
 .El
 .Sh EXAMPLES
 Warm the airplane-mode channel at session start:
@@ -758,8 +764,19 @@ and flash it:
 python3 @PREFIX@/share/examples/bosd/bsd.py bsd.png
 bosd bsd.png
 .Ed
+.Pp
+Start
+.Xr picom 1
+so the glyph and the gauge have no shadow border.
+.Fl Fl config
+replaces the configuration picom would otherwise load
+.Pq the one that turns shadows on :
+.Bd -literal -offset indent
+picom --config @PREFIX@/share/examples/bosd/picom.conf -b
+.Ed
 .Sh SEE ALSO
 .Xr bosd-start 1 ,
+.Xr picom 1 ,
 .Xr xrandr 1 ,
 .Xr bosd 3
 .Sh AUTHORS
