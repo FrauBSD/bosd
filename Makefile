@@ -8,9 +8,27 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-10-22 09:59:50 -0700 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-10-22 10:01:45 -0700 Devin Teske $
 #
 ############################################################ OPTIONS
+
+INSTALL_TESTS?=	yes
+
+############################################################ PROGRAMS
+
+PROG=		bosd
+
+PYTHON?=	python3
+
+############################################################ LIBRARY
+
+SHLIB_MAJOR=	4
+SHLIB=		libbosd.so.${SHLIB_MAJOR}
+LIBSRCS=	src/libbosd.c src/ipc.c src/escape.c
+LIBOBJS=	${LIBSRCS:.c=.o}
+
+############################################################ PATHS
+
 PREFIX?=	/usr/local
 BINDIR?=	${PREFIX}/bin
 LIBDIR?=	${PREFIX}/lib
@@ -23,25 +41,29 @@ MAN3DIR?=	${SHAREDIR}/man/man3
 EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
 TESTDIR?=	${DATADIR}/tests
 PKGCONFIGDIR?=	${LIBDIR}/pkgconfig
-PYTHON?=	python3
-INSTALL_TESTS?=	yes
 
-CC?=		cc
-CFLAGS?=	-O2 -Wall -Wextra
+############################################################ PKG-CONFIG
+
 PKG_CONFIG?=	pkg-config
-# Includes and libs come from pkg-config only (no hard-coded PREFIX paths).
 PKGS=		x11 xrandr xrender xext xft fontconfig libpng
 PKG_CFLAGS!=	${PKG_CONFIG} --cflags ${PKGS}
 PKG_LIBS!=	${PKG_CONFIG} --libs ${PKGS}
+
+############################################################ COMPILER
+
+CC?=		cc
+CFLAGS?=	-O2 -Wall -Wextra
 CPPFLAGS+=	-Iinclude -DBOSD_ICONDIR='"${DATADIR}"' ${PKG_CFLAGS}
+
+.c.o:
+	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
+
+############################################################ LINKER
+
 LDLIBS=		${PKG_LIBS}
 
-SHLIB_MAJOR=	4
-SHLIB=		libbosd.so.${SHLIB_MAJOR}
-LIBSRCS=	src/libbosd.c src/ipc.c src/escape.c
-LIBOBJS=	${LIBSRCS:.c=.o}
+############################################################ FILES
 
-PROG=		bosd
 PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
 		src/osd_chrome.c src/draw_utf8.c src/badge.c \
 		src/bar_geom.c src/bar_paint.c src/bar.c \
@@ -50,6 +72,19 @@ PROGOBJS=	${PROGSRCS:.c=.o}
 MAN=		man/bosd.1
 MAN3=		man/bosd.3
 PICOMCONF=	examples/picom.conf
+EXAMPLE_PNGS=	examples/bsd.png \
+		examples/airplane-on.png examples/airplane-off.png \
+		examples/audio-speakers.png examples/audio-headphones.png \
+		examples/auto-rotate-on.png examples/auto-rotate-off.png \
+		examples/lid-awake.png examples/lid-s0ix.png \
+		examples/mirror-on.png examples/mirror-off.png \
+		examples/mirror-none.png examples/mirror-extend.png \
+		examples/mirror-extend-none.png \
+		examples/tile-on.png examples/tile-float.png
+
+############################################################ TARGETS
+
+.PHONY: all
 
 all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN} ${PICOMCONF}
 
@@ -64,9 +99,6 @@ ${PROG}: ${PROGOBJS} ${SHLIB} libbosd.so
 		-Wl,-rpath,\$$ORIGIN:\$$ORIGIN/../lib:${LIBDIR} ${LDLIBS}
 
 ${LIBOBJS}: CFLAGS+= -fPIC
-
-.c.o:
-	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
 
 ${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h
 
@@ -93,15 +125,7 @@ bosd.pc: Makefile
 	    'Cflags: -I$${includedir}' \
 	    > bosd.pc
 
-EXAMPLE_PNGS=	examples/bsd.png \
-		examples/airplane-on.png examples/airplane-off.png \
-		examples/audio-speakers.png examples/audio-headphones.png \
-		examples/auto-rotate-on.png examples/auto-rotate-off.png \
-		examples/lid-awake.png examples/lid-s0ix.png \
-		examples/mirror-on.png examples/mirror-off.png \
-		examples/mirror-none.png examples/mirror-extend.png \
-		examples/mirror-extend-none.png \
-		examples/tile-on.png examples/tile-float.png
+.PHONY: install
 
 install: all ${EXAMPLE_PNGS}
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
@@ -134,6 +158,8 @@ install: all ${EXAMPLE_PNGS}
 	install -m 555 tests/*.sh ${DESTDIR}${TESTDIR}/
 .endif
 
+.PHONY: example
+
 example: ${EXAMPLE_PNGS}
 
 examples/bsd.png: examples/bsd.py tools/glyph.py
@@ -164,10 +190,14 @@ examples/tile-on.png examples/tile-float.png: \
 		examples/tile.py tools/glyph.py
 	${PYTHON} examples/tile.py examples
 
+.PHONY: clean
+
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
 		${MAN} ${PICOMCONF} ${EXAMPLE_PNGS}
 	rm -rf tools/__pycache__ examples/__pycache__
+
+.PHONY: test
 
 #
 # Visual walkthrough: prints EXPECT lines, then paints with bosd -D
@@ -176,4 +206,6 @@ clean:
 test: all
 	./tests/run
 
-.PHONY: all install clean example test
+################################################################################
+# END
+################################################################################
