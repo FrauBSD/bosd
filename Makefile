@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD$
+# $FrauBSD: bosd/Makefile 2026-10-22 09:57:14 -0700 Devin Teske $
 #
 ############################################################ OPTIONS
 PREFIX?=	/usr/local

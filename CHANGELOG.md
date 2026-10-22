@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD$)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-22 09:57:14 -0700 Devin Teske $)
 
 # Changelog
 

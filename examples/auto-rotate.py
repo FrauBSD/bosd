@@ -9,7 +9,7 @@
 #
 # $Title: Make auto-rotate orientation lock PNG glyphs $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD$
+# $FrauBSD: bosd/examples/auto-rotate.py 2026-10-22 09:57:14 -0700 Devin Teske $
 #
 ############################################################ DOCSTRING
 
