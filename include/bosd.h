@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"10.5"
+#define BOSD_VERSION	"10.7"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
@@ -38,8 +38,9 @@ extern "C" {
 
 /*
  * One display request.  Zero the struct (or call bosd_req_init) then
- * fill the fields that apply.  String fields are NUL-terminated and
- * may use the same escapes as bosd(1): \xNN, \uNNNN, \UNNNNNNNN, \\.
+ * fill the fields that apply.  String fields are NUL-terminated.
+ * Literal whitespace is kept.  Escapes match bosd(1): \xNN, \uNNNN,
+ * \UNNNNNNNN, \\.
  */
 struct bosd_req {
 	double	 hold;		/* seconds; -1 until clear/replace */

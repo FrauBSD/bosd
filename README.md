@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/README.md 2026-10-22 09:57:14 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/README.md 2026-10-29 16:19:12 -0700 Devin Teske $)
 
 # bosd
 
@@ -73,6 +73,8 @@ bosd -n audio -o audio-speakers         # no outline halo
 bosd -c 3                               # full-screen 3-2-1 countdown
 bosd -n shot -T '\u2713' 1              # big checkmark (escapes decode)
 bosd -n shot -t 'Screenshot\x0ashot.png' 2 # small green caption lines
+bosd -n shot -t 'Screenshot
+shot.png' 2                 # small green caption lines (literal newline ok)
 bosd -n shot -F orange -t saved         # small text, another color
 bosd -n audio audio-speakers -1         # hold until -C or replaced
 bosd -n shot -C                         # clear the channel's active render

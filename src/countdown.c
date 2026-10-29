@@ -169,8 +169,9 @@ countdown_begin(const struct show_req *req)
 
 	FcInit();
 	lock_len = 0;
+	/* Escapes already decoded by parse_show or the CLI (-D). */
 	if (req->text)
-		decode_escapes(req->spec, text_buf, sizeof(text_buf));
+		strlcpy(text_buf, req->spec, sizeof(text_buf));
 	if (layout_fullscreen() != 0)
 		return (-1);
 

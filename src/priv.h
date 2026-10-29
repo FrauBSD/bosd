@@ -13,7 +13,13 @@
 
 #include <bosd.h>
 
-#define BOSD_MSG_MAX	1696
+/*
+ * One SHOW datagram.  Transport encoding expands each byte of spec
+ * (1023), badge (31), font (127), and two captions (63) to at most
+ * 4 bytes, plus colors and the numeric fields (about 5400).  8192
+ * leaves margin for a long hold or offset.
+ */
+#define BOSD_MSG_MAX	8192
 
 #ifndef BOSD_ICONDIR
 #error "BOSD_ICONDIR must be set by the Makefile (-DBOSD_ICONDIR=...)"

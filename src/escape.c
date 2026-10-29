@@ -51,13 +51,17 @@ utf8_put(char *out, unsigned long cp)
 /*
  * Decode \xNN (raw byte), \uNNNN and \UNNNNNNNN (codepoint, UTF-8
  * encoded), and \\.  Malformed escapes pass through literally.
+ * Plain bytes are copied in full; only a codepoint reserves room
+ * for its UTF-8 sequence.
  */
 void
 decode_escapes(const char *in, char *out, size_t outlen)
 {
 	size_t o = 0;
 
-	while (*in != '\0' && o + 5 < outlen) {
+	if (outlen == 0)
+		return;
+	while (*in != '\0' && o + 1 < outlen) {
 		unsigned long cp = 0;
 		int i, n, v;
 
@@ -95,8 +99,20 @@ decode_escapes(const char *in, char *out, size_t outlen)
 		}
 		if (in[1] == 'x')
 			out[o++] = (char)cp;
-		else
-			o += utf8_put(out + o, cp);
+		else {
+			char ubuf[4];
+			size_t k, nput;
+
+			nput = utf8_put(ubuf, cp);
+			if (nput == 0) {
+				in += 2 + n;
+				continue;
+			}
+			if (o + nput >= outlen)
+				break;
+			for (k = 0; k < nput; k++)
+				out[o++] = ubuf[k];
+		}
 		in += 2 + n;
 	}
 	out[o] = '\0';

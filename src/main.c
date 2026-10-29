@@ -192,10 +192,10 @@ main(int argc, char **argv)
 			strlcpy(req.color, optarg, sizeof(req.color));
 			break;
 		case 'b':
-			if (strlen(optarg) >= sizeof(req.badge) ||
-			    optarg[strcspn(optarg, " \t\n")] != '\0') {
+			if (optarg[0] == '\0' ||
+			    strlen(optarg) >= sizeof(req.badge)) {
 				fprintf(stderr, "bosd: -b badge must be "
-				    "1 to %zu characters, no whitespace\n",
+				    "1 to %zu characters\n",
 				    sizeof(req.badge) - 1);
 				usage();
 			}
@@ -392,11 +392,9 @@ main(int argc, char **argv)
 			if (argc < 1 || argc > 2)
 				usage();
 			if (argv[0][0] == '\0' ||
-			    strlen(argv[0]) >= sizeof(req.spec) ||
-			    argv[0][strcspn(argv[0], " \t\n")] != '\0') {
+			    strlen(argv[0]) >= sizeof(req.spec)) {
 				fprintf(stderr, "bosd: -%c text must be "
-				    "1 to %zu characters, no whitespace "
-				    "(escape it: \\x20)\n",
+				    "1 to %zu characters\n",
 				    tflag ? 't' : 'T',
 				    sizeof(req.spec) - 1);
 				usage();
@@ -437,6 +435,7 @@ main(int argc, char **argv)
 		if (!Dflag && daemon_alive() && send_show(&req) == 0)
 			return (0);
 		clear_channel_if_asked(&req);
+		decode_field(req.spec, sizeof(req.spec));
 		decode_field(req.badge, sizeof(req.badge));
 		decode_field(req.prefix, sizeof(req.prefix));
 		decode_field(req.append, sizeof(req.append));

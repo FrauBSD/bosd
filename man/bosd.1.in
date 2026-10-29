@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 20, 2026
+.Dd October 26, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -223,13 +223,14 @@ Fill color is
 .Pq default white .
 Used for index digits and short labels
 .Pq e.g. a headphone number, Dq All .
-At most 31 characters before decoding; literal whitespace is not
-permitted.
-Escapes decode as with
+At most 31 characters before decoding.
+Literal whitespace is permitted; escapes decode as with
 .Fl T ,
 so
 .Ql a\ex20b
-badges as
+and
+.Ql "a b"
+both badge as
 .Dq a b .
 .It Fl C
 Clear the channel's display: artwork, gauge, and small caption alike.
@@ -573,7 +574,7 @@ so
 .Fl T Ql \eu2713
 draws the checkmark
 .Pc .
-Literal whitespace is not permitted; embed it as
+Literal whitespace is permitted; a space may also be written
 .Ql \ex20 .
 Honors
 .Fl A , b , F , f , o , O , s , x ,
@@ -607,7 +608,7 @@ and
 .Fl O
 change opacity only, not the typeface.
 Lines split on newline
-.Pq escape Ql \ex0a ,
+.Pq a literal newline, or escape Ql \ex0a ,
 center individually, and grow downward.
 Has its own slot and hold on the channel: only another
 .Fl t
@@ -623,8 +624,8 @@ leaves it alone
 .Pq and vice versa .
 Escapes decode as with
 .Fl T ;
-literal whitespace is not permitted
-.Pq embed it as Ql \ex20 .
+literal whitespace is permitted
+.Pq a space may also be written Ql \ex20 .
 Honors
 .Fl A , F , f , o , O , s , x ,
 and
@@ -738,7 +739,14 @@ bosd -n shot -T '\eu2713' 1
 Announce the saved file
 .Pq two green caption lines at the panel bottom :
 .Bd -literal -offset indent
+# encoded newline (\ex0a):
+.Pp
 bosd -n shot -t 'Screenshot\ex0ascreenshot-2026.09.08.png' 2
+.Pp
+# or literal newline:
+.Pp
+bosd -n shot -t 'Screenshot
+screenshot-2026.09.08.png' 2
 .Ed
 .Pp
 Clear whatever the channel is showing:

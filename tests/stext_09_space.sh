@@ -11,6 +11,12 @@ test_begin "small text space escape"
 expect "One caption line near the panel bottom"
 expect "Text reads: hello world (with a real space)"
 expect "Embedded \\x20 in the -t operand becomes the space"
-expect "Literal whitespace in the -t operand is rejected; escapes required"
 
 show -t 'hello\x20world' "$( hold_arg )"
+
+test_begin "small text literal space"
+expect "One caption line near the panel bottom"
+expect "Text reads: hello world (with a real space)"
+expect "A literal space in the -t operand is kept (escapes still work)"
+
+show -t 'hello world' "$( hold_arg )"

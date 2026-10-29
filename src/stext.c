@@ -184,7 +184,8 @@ stext_show(const struct show_req *req)
 	if (stext_metrics(req->font, req->scale) != 0)
 		return (-1);
 
-	decode_escapes(req->spec, text, sizeof(text));
+	/* Escapes already decoded by parse_show or the CLI (-D). */
+	strlcpy(text, req->spec, sizeof(text));
 	for (p = text; nl < STEXT_MAXLINES && *p != '\0';) {
 		lines[nl++] = p;
 		p = strchr(p, '\n');
