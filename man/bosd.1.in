@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 26, 2026
+.Dd October 30, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -13,7 +13,12 @@
 .Nm
 .Op Fl hv
 .Op Fl n Ar instance
-.Bro Fl d | Fl C Brc
+.Op Fl S Ar screen
+.Fl d
+.Nm
+.Op Fl hv
+.Op Fl n Ar instance
+.Fl C
 .Nm
 .Op Fl CDhov
 .Op Fl n Ar instance
@@ -28,6 +33,7 @@
 .Op Fl O Ar opacity
 .Op Fl P Ar percent
 .Op Fl p Ar text
+.Op Fl S Ar screen
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
@@ -44,6 +50,7 @@
 .Op Fl g Ar percent
 .Op Fl O Ar opacity
 .Op Fl P Ar percent
+.Op Fl S Ar screen
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
@@ -61,6 +68,7 @@
 .Op Fl O Ar opacity
 .Op Fl P Ar percent
 .Op Fl p Ar text
+.Op Fl S Ar screen
 .Op Fl s Ar scale
 .Op Fl x Ar offset
 .Op Fl y Ar offset
@@ -85,6 +93,24 @@ centered on the monitor marked primary
 when no primary is set, on the laptop's built-in panel
 .Pq eDP/LVDS/DSI ;
 and failing both, on the X screen as a whole.
+.Fl S
+names another output
+.Po
+for example
+.Li DP-4
+or
+.Li eDP-1
+.Pc ,
+or
+.Ql Li all
+to draw that same show on every connected output at once.
+Small text and the gauge use that same output.
+With
+.Fl d ,
+.Fl S
+is the channel default for a later request that does not pass
+.Fl S
+itself.
 Small text centers near the bottom of the same panel, stacked
 above the gauge bar's band so the two never overlap.
 The gauge bar and small caption text
@@ -287,6 +313,9 @@ displays.
 Run as the display daemon for
 .Ar instance ,
 listening on a per-user datagram socket.
+.Fl S
+names the screen a later request uses when it omits
+.Fl S .
 .It Fl F Ar color
 Fill text and badges with
 .Ar color ,
@@ -527,6 +556,24 @@ marking seconds.
 On a gauge alone, the same string is drawn in the overage label's
 face and size, centerline-aligned with the bar and right-justified
 just left of the ticks.
+.It Fl S Ar screen
+Draw on the RandR output named
+.Ar screen
+instead of the primary
+.Pq or the built-in panel when no primary is set .
+.Ql Li all
+draws one copy on every connected output, each sized and centered
+on that output.
+Two outputs that share a rectangle
+.Pq a mirror
+are drawn once.
+A request that passes
+.Fl S
+overrides the screen the daemon was started with.
+An unknown or disconnected name is an error.
+.Fl S
+applies to a glyph, a countdown, large text, small text, and the
+gauge.
 .It Fl s Ar scale
 Multiply the render size by
 .Ar scale
@@ -716,6 +763,21 @@ draws
 Warm the airplane-mode channel at session start:
 .Bd -literal -offset indent
 bosd -n airplane -d &
+.Ed
+.Pp
+The same, with later shows defaulting to the built-in panel:
+.Bd -literal -offset indent
+bosd -n airplane -S eDP-1 -d &
+.Ed
+.Pp
+One show on another output, whatever the daemon's default is:
+.Bd -literal -offset indent
+bosd -n airplane -S DP-4 airplane-on 1.5
+.Ed
+.Pp
+Countdown on every connected output:
+.Bd -literal -offset indent
+bosd -S all -c 3
 .Ed
 .Pp
 Flash the on glyph for 1.5 seconds:

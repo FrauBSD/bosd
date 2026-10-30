@@ -22,6 +22,7 @@ extern "C" {
 #define BOSD_COLOR_MAX	32
 #define BOSD_FONT_MAX	128
 #define BOSD_INSTANCE_MAX 64
+#define BOSD_SCREEN_MAX	64
 
 #define BOSD_GAUGE_DEF	"#2AC12A"
 #define BOSD_GAUGE_HOLD_DEF 3.0
@@ -40,7 +41,8 @@ extern "C" {
  * One display request.  Zero the struct (or call bosd_req_init) then
  * fill the fields that apply.  String fields are NUL-terminated.
  * Literal whitespace is kept.  Escapes match bosd(1): \xNN, \uNNNN,
- * \UNNNNNNNN, \\.
+ * \UNNNNNNNN, \\.  screen is a RandR output name or "all"; empty
+ * means the daemon's -S default, or the primary when that was not set.
  */
 struct bosd_req {
 	double	 hold;		/* seconds; -1 until clear/replace */
@@ -64,6 +66,7 @@ struct bosd_req {
 	double	 alpha;		/* <0 native PNG; else multiply PNG alpha */
 	double	 outline_alpha;	/* multiplies outline alpha; 1 = opaque */
 	char	 font[BOSD_FONT_MAX];	/* -f fontconfig family; empty = default */
+	char	 screen[BOSD_SCREEN_MAX]; /* -S output, "all", or empty */
 };
 
 /* Fill defaults: hold 2s, scale 1, native PNG alpha, outline on and

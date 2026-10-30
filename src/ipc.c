@@ -30,7 +30,10 @@
  * -t) in the same show, BAR carries "-" for TCOLOR/FONT/PFX/APX so
  * those adornments stay on the artwork SHOW (bar_show only labels a
  * gauge-alone request).  Small text (CNT -2) is its own slot: only
- * another caption or CLEAR replaces it.  PREV is a prior-percent
+ * another caption or CLEAR replaces it.  A datagram may be
+ * prefixed with "SCR <screen>" when the client passed -S: one
+ * output name, or "all".  Absent, the daemon uses the screen it
+ * was started with (-S), or the primary.  PREV is a prior-percent
  * watermark (-1 disables); the daemon latches the first PREV when the
  * bar appears and ignores later ones until the bar hides.  ALPHA < 0
  * means full fill opacity on the bar (native PNG does not apply);
@@ -111,6 +114,23 @@ write_pid_file(void)
 	return (0);
 }
 
+/* Body starts after an optional "SCR <screen> " prefix. */
+static char *
+msg_body(char *msg, size_t msgsz, const char *screen, size_t *left)
+{
+	size_t off = 0;
+
+	if (screen != NULL && screen[0] != '\0') {
+		int n = snprintf(msg, msgsz, "SCR %s ", screen);
+
+		if (n < 0 || (size_t)n >= msgsz)
+			return (NULL);
+		off = (size_t)n;
+	}
+	*left = msgsz - off;
+	return (msg + off);
+}
+
 static int
 send_dgram(const char *sock, const char *msg)
 {
@@ -158,7 +178,6 @@ encode_ws(const char *in, char *out, size_t outlen)
 int
 send_show_to(const char *sock, const struct show_req *req)
 {
-	char msg[BOSD_MSG_MAX];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
 	char font[BOSD_FONT_MAX * 4];
 
@@ -190,23 +209,40 @@ send_show_to(const char *sock, const struct show_req *req)
 			strlcpy(apx, "-", sizeof(apx));
 			strlcpy(font, "-", sizeof(font));
 		}
-		snprintf(msg, sizeof(msg),
-		    "BAR %.2f %d %d %d %s %d %.3f %.3f %d %.3f %s %s %s %s",
-		    req->gauge_hold, req->x_off, req->y_off, req->gauge,
-		    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
-		    req->gauge_prev, req->alpha, req->outline_alpha,
-		    req->outline, req->scale > 0.0 ? req->scale : 1.0,
-		    bar_alone && req->tcolor[0] != '\0' ? req->tcolor : "-",
-		    bar_alone && req->font[0] != '\0' ? font : "-",
-		    pfx, apx);
-		if (send_dgram(sock, msg) != 0)
-			return (-1);
+		{
+			char msg[BOSD_MSG_MAX];
+			char *bp;
+			size_t left;
+			int nw;
+
+			bp = msg_body(msg, sizeof(msg), req->screen, &left);
+			if (bp == NULL)
+				return (-1);
+			nw = snprintf(bp, left,
+			    "BAR %.2f %d %d %d %s %d %.3f %.3f %d %.3f %s %s %s %s",
+			    req->gauge_hold, req->x_off, req->y_off, req->gauge,
+			    req->color[0] != '\0' ? req->color : BOSD_GAUGE_DEF,
+			    req->gauge_prev, req->alpha, req->outline_alpha,
+			    req->outline, req->scale > 0.0 ? req->scale : 1.0,
+			    bar_alone && req->tcolor[0] != '\0' ?
+			    req->tcolor : "-",
+			    bar_alone && req->font[0] != '\0' ? font : "-",
+			    pfx, apx);
+			if (nw < 0 || (size_t)nw >= left)
+				return (-1);
+			if (send_dgram(sock, msg) != 0)
+				return (-1);
+		}
 		if (bar_alone)
 			return (0);
 	}
 	{
+		char msg[BOSD_MSG_MAX];
 		char spec[BOSD_SPEC_MAX * 4];
 		char badge[BOSD_BADGE_MAX * 4];
+		char *bp;
+		size_t left;
+		int nw;
 
 		encode_ws(req->prefix, pfx, sizeof(pfx));
 		encode_ws(req->append, apx, sizeof(apx));
@@ -216,7 +252,10 @@ send_show_to(const char *sock, const struct show_req *req)
 			encode_ws(req->badge, badge, sizeof(badge));
 		else
 			badge[0] = '\0';
-		snprintf(msg, sizeof(msg),
+		bp = msg_body(msg, sizeof(msg), req->screen, &left);
+		if (bp == NULL)
+			return (-1);
+		nw = snprintf(bp, left,
 		    "%.2f %d %d %.3f %.3f %.3f %d %d %s %s %s %s %s%s%s",
 		    req->hold, req->x_off, req->y_off, req->scale, req->alpha,
 		    req->outline_alpha, req->outline,
@@ -225,6 +264,8 @@ send_show_to(const char *sock, const struct show_req *req)
 		    req->font[0] != '\0' ? font : "-",
 		    pfx, apx, spec,
 		    badge[0] != '\0' ? " " : "", badge);
+		if (nw < 0 || (size_t)nw >= left)
+			return (-1);
 		return (send_dgram(sock, msg));
 	}
 }
@@ -250,15 +291,34 @@ send_clear(void)
 int
 parse_show(const char *buf, struct show_req *req)
 {
+	const char *msg = buf;
 	double hold, scale, alpha, oalpha;
 	char name[BOSD_SPEC_MAX * 4];
 	char badge[BOSD_BADGE_MAX * 4];
 	char tcolor[BOSD_COLOR_MAX];
 	char font[BOSD_FONT_MAX * 4];
 	char pfx[BOSD_CAPTION_MAX * 4], apx[BOSD_CAPTION_MAX * 4];
+	char screen[BOSD_SCREEN_MAX];
 	int n, x_off, y_off, outline, count;
 
-	if (strcmp(buf, "CLEAR") == 0) {
+	screen[0] = '\0';
+	if (strncmp(msg, "SCR ", 4) == 0) {
+		const char *sp;
+		size_t nlen;
+
+		msg += 4;
+		sp = strchr(msg, ' ');
+		if (sp == NULL)
+			return (-1);
+		nlen = (size_t)(sp - msg);
+		if (nlen == 0 || nlen >= sizeof(screen))
+			return (-1);
+		memcpy(screen, msg, nlen);
+		screen[nlen] = '\0';
+		msg = sp + 1;
+	}
+
+	if (strcmp(msg, "CLEAR") == 0) {
 		memset(req, 0, sizeof(*req));
 		req->clear = 1;
 		req->gauge = -1;
@@ -267,7 +327,7 @@ parse_show(const char *buf, struct show_req *req)
 		req->outline_alpha = BOSD_OUTLINE_ALPHA_DEF;
 		return (0);
 	}
-	if (strncmp(buf, "BAR ", 4) == 0) {
+	if (strncmp(msg, "BAR ", 4) == 0) {
 		double alpha, oalpha, scale;
 		char tcolor[BOSD_COLOR_MAX];
 		char font[BOSD_FONT_MAX * 4];
@@ -285,7 +345,7 @@ parse_show(const char *buf, struct show_req *req)
 		font[0] = '\0';
 		pfx[0] = '\0';
 		apx[0] = '\0';
-		n = sscanf(buf + 4,
+		n = sscanf(msg + 4,
 		    "%lf %d %d %d %31s %d %lf %lf %d %lf %31s %511s %255s %255s",
 		    &hold, &x_off, &y_off, &req->gauge, req->color,
 		    &req->gauge_prev, &alpha, &oalpha, &outline, &scale,
@@ -331,6 +391,7 @@ parse_show(const char *buf, struct show_req *req)
 			decode_escapes(pfx, req->prefix, sizeof(req->prefix));
 		if (n >= 14 && strcmp(apx, "-") != 0)
 			decode_escapes(apx, req->append, sizeof(req->append));
+		strlcpy(req->screen, screen, sizeof(req->screen));
 		return (0);
 	}
 
@@ -339,7 +400,7 @@ parse_show(const char *buf, struct show_req *req)
 	alpha = BOSD_ALPHA_NATIVE;
 	oalpha = BOSD_OUTLINE_ALPHA_DEF;
 	/* Field widths track BOSD_*_MAX after encode_ws (x4). */
-	n = sscanf(buf,
+	n = sscanf(msg,
 	    "%lf %d %d %lf %lf %lf %d %d %31s %511s %255s %255s %4095s %127s",
 	    &hold, &x_off, &y_off, &scale, &alpha, &oalpha, &outline,
 	    &count, tcolor, font, pfx, apx, name, badge);
@@ -397,6 +458,7 @@ parse_show(const char *buf, struct show_req *req)
 		req->append[0] = '\0';
 	else
 		decode_escapes(apx, req->append, sizeof(req->append));
+	strlcpy(req->screen, screen, sizeof(req->screen));
 	return (0);
 }
 

@@ -402,7 +402,7 @@ icon_lookup(const char *spec, double scale, double alpha, double oalpha,
 	for (pp = &cache_head; (ic = *pp) != NULL; pp = &ic->next) {
 		if (strcmp(ic->path, path) == 0 && ic->scale == scale &&
 		    ic->alpha == alpha && ic->outline_alpha == oalpha &&
-		    ic->outline == outline) {
+		    ic->outline == outline && ic->px == icon_px) {
 			*pp = ic->next;
 			ic->next = cache_head;
 			cache_head = ic;
@@ -423,6 +423,7 @@ icon_lookup(const char *spec, double scale, double alpha, double oalpha,
 	ic->alpha = alpha;
 	ic->outline_alpha = oalpha;
 	ic->outline = outline;
+	ic->px = icon_px;
 	ic->rgba = rgba;
 	ic->w = w;
 	ic->h = h;

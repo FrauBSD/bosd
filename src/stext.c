@@ -45,6 +45,70 @@ static int	 tmapped;
 static int	 t_argb;	/* twin is an ARGB window */
 static int	 tdepth;
 
+struct stext_slot {
+	Window		 win;
+	Pixmap		 pix, mask;
+	Colormap	 cmap;
+	Visual		*visual;
+	GC		 pgc, mgc;
+	XftDraw		*xdraw;
+	int		 mapped;
+	int		 argb;
+	int		 depth;
+};
+
+static struct stext_slot sslot[BOSD_SCREEN_SLOTS];
+static int scur = -1;
+
+static void
+stext_store(void)
+{
+	struct stext_slot *s;
+
+	if (scur < 0)
+		return;
+	s = &sslot[scur];
+	s->win = twin;
+	s->pix = pix;
+	s->mask = mask;
+	s->cmap = tcmap;
+	s->visual = tvisual;
+	s->pgc = pgc;
+	s->mgc = mgc;
+	s->xdraw = xdraw;
+	s->mapped = tmapped;
+	s->argb = t_argb;
+	s->depth = tdepth;
+}
+
+static void
+stext_load(int slot)
+{
+	struct stext_slot *s = &sslot[slot];
+
+	twin = s->win;
+	pix = s->pix;
+	mask = s->mask;
+	tcmap = s->cmap;
+	tvisual = s->visual;
+	pgc = s->pgc;
+	mgc = s->mgc;
+	xdraw = s->xdraw;
+	tmapped = s->mapped;
+	t_argb = s->argb;
+	tdepth = s->depth;
+}
+
+static void
+stext_select(int slot)
+{
+	if (slot < 0 || slot >= BOSD_SCREEN_SLOTS || slot == scur)
+		return;
+	stext_store();
+	scur = slot;
+	stext_load(slot);
+}
+
 static void
 stext_kill_xdraw(void)
 {
@@ -155,8 +219,8 @@ stext_show_argb(const struct show_req *req, char **lines, int nl,
 	return (0);
 }
 
-int
-stext_show(const struct show_req *req)
+static int
+stext_show_one(const struct show_req *req)
 {
 	XftColor xink, xblack;
 	char text[BOSD_SPEC_MAX];
@@ -171,7 +235,6 @@ stext_show(const struct show_req *req)
 	Visual *vis;
 	Colormap cm;
 
-	refresh_screen_geom();
 	clamp_paint_alphas(req, &fill_a, &out_a);
 	/*
 	 * Real translucency needs ARGB.  -o alone stays on the shaped
@@ -294,36 +357,73 @@ stext_show(const struct show_req *req)
 	return (0);
 }
 
+int
+stext_show(const struct show_req *req)
+{
+	int i, n, ok = 0;
+
+	if (screen_prepare(req->screen) != 0)
+		return (-1);
+	n = screen_count();
+	for (i = 0; i < n; i++) {
+		screen_use(i);
+		stext_select(screen_slot(i));
+		if (stext_show_one(req) == 0)
+			ok = 1;
+	}
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		if (screen_targeted(i))
+			continue;
+		stext_select(i);
+		if (tmapped || twin != 0)
+			stext_drop_window();
+	}
+	stext_store();
+	return (ok ? 0 : -1);
+}
+
 void
 stext_hide(void)
 {
+	int i;
+
 	/*
 	 * Destroy rather than unmap: a later -t must not remap a
 	 * compositor-cached frame, and must not free a pixmap that is
 	 * still installed as the window background (seen as corrupt
 	 * glyphs on stext_01 after coexist_01 in tests/run -d).
 	 */
-	if (tmapped || twin != 0)
-		stext_drop_window();
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		stext_select(i);
+		if (tmapped || twin != 0)
+			stext_drop_window();
+	}
+	stext_store();
 	XSync(dpy, False);
 }
 
 void
 stext_cleanup(void)
 {
+	int i;
+
 	if (dpy == NULL)
 		return;
-	stext_kill_xdraw();
 	stext_close_fonts();
-	if (pgc != None) {
-		XFreeGC(dpy, pgc);
-		pgc = None;
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		stext_select(i);
+		stext_kill_xdraw();
+		if (pgc != None) {
+			XFreeGC(dpy, pgc);
+			pgc = None;
+		}
+		if (mgc != None) {
+			XFreeGC(dpy, mgc);
+			mgc = None;
+		}
+		stext_drop_window();
 	}
-	if (mgc != None) {
-		XFreeGC(dpy, mgc);
-		mgc = None;
-	}
-	stext_drop_window();
+	stext_store();
 }
 
 /* One-shot fallback: no daemon on the channel, draw it ourselves. */

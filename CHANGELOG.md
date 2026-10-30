@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-29 16:19:12 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-30 11:12:58 -0700 Devin Teske $)
 
 # Changelog
 
@@ -6,9 +6,10 @@ Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
 
-## 10.7 (2026-10-29)
+## 10.7 (2026-10-30)
 
 - Allow literal whitespace in -t/-T/-b; keep \xNN / \u / \U escapes
+- Add -S to choose an output; all copies the show onto every output
 
 ## 10.6 (2026-10-22)
 

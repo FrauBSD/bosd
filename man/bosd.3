@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 17, 2026
+.Dd October 30, 2026
 .Dt BOSD 3
 .Os
 .Sh NAME
@@ -63,6 +63,13 @@ Fill the fields that apply, then call
 .Fn bosd_show .
 String fields accept the same backslash escapes documented in
 .Xr bosd 1 .
+The
+.Fa screen
+member is a RandR output name or
+.Ql Li all ;
+empty leaves the daemon's
+.Fl S
+default, or the primary when the daemon was not given one.
 .Pp
 .Fn bosd_show
 returns 0 when the datagram is accepted, or \-1 on failure

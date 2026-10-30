@@ -30,7 +30,6 @@ static int m_kind;
 static struct show_req m_req;
 static double m_deadline;	/* next tick or expiry; < 0 never */
 static int m_digit;
-static struct icon *m_icon;
 
 /* Gauge slot. */
 static int b_active;
@@ -90,7 +89,6 @@ main_stop(void)
 	if (m_kind != M_NONE)
 		hide_overlay();
 	m_kind = M_NONE;
-	m_icon = NULL;
 }
 
 static void
@@ -116,12 +114,11 @@ stext_start(const struct show_req *req)
 static void
 main_start(const struct show_req *req)
 {
-	if (m_kind == M_COUNT || m_kind == M_TEXT)
-		countdown_end();
-	else if (m_kind != M_NONE)
-		hide_overlay();
-
 	if (req->count > 0) {
+		if (m_kind == M_COUNT || m_kind == M_TEXT)
+			countdown_end();
+		else if (m_kind != M_NONE)
+			hide_overlay();
 		m_req = *req;
 		if (countdown_begin(&m_req) != 0) {
 			main_stop();
@@ -134,6 +131,10 @@ main_start(const struct show_req *req)
 		return;
 	}
 	if (req->text) {
+		if (m_kind == M_COUNT || m_kind == M_TEXT)
+			countdown_end();
+		else if (m_kind != M_NONE)
+			hide_overlay();
 		m_req = *req;
 		if (countdown_begin(&m_req) != 0) {
 			main_stop();
@@ -145,21 +146,26 @@ main_start(const struct show_req *req)
 		return;
 	}
 
-	/* Icon: an unresolvable replacement keeps the current show. */
+	/*
+	 * Icon: an unresolvable name keeps the current show.  A named
+	 * output that is not connected does too, after screen_prepare
+	 * has already said so.  Tear a countdown down first so its
+	 * Xft draw is gone before a window is destroyed.
+	 */
 	{
-		struct icon *ic;
+		int was_cd = (m_kind == M_COUNT || m_kind == M_TEXT);
+		int rc;
 
-		ic = icon_lookup(req->spec, req->scale, req->alpha,
-		    req->outline_alpha, req->outline);
-		if (ic == NULL) {
-			if (m_kind == M_NONE)
-				hide_overlay();
+		if (was_cd)
+			countdown_end();
+		m_req = *req;
+		rc = paint_show(&m_req);
+		if (rc != 0) {
+			if (was_cd || m_kind == M_NONE)
+				main_stop();
 			return;
 		}
-		m_req = *req;
 		m_kind = M_ICON;
-		m_icon = ic;
-		paint_icon(m_icon, &m_req);
 		m_deadline = expiry(m_req.hold);
 	}
 }
@@ -218,6 +224,7 @@ drain_socket(int sockfd)
 		buf[n] = '\0';
 		if (parse_show(buf, &req) != 0)
 			continue;
+		screen_apply_default(&req);
 		if (req.clear) {
 			main_stop();
 			bar_hide();
@@ -291,8 +298,8 @@ service_x(void)
 
 		XNextEvent(dpy, &ev);
 		if (ev.type == Expose && ev.xexpose.count == 0 &&
-		    m_kind == M_ICON && mapped && m_icon != NULL)
-			paint_icon(m_icon, &m_req);
+		    m_kind == M_ICON)
+			paint_show(&m_req);
 	}
 }
 
@@ -307,6 +314,7 @@ run_daemon(void)
 
 	if (init_display() != 0)
 		return (1);
+	screen_check_default();
 
 	sock = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (sock < 0)
@@ -367,8 +375,8 @@ run_daemon(void)
 int
 show_once(const struct show_req *req)
 {
-	struct icon *ic;
 	double mdl, bdl = 0.0, hold;
+	int rc;
 
 	hold = req->hold;
 	if (hold != -1.0 && hold <= 0.0)
@@ -378,13 +386,13 @@ show_once(const struct show_req *req)
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
 
-	ic = icon_lookup(req->spec, req->scale, req->alpha,
-	    req->outline_alpha, req->outline);
-	if (ic == NULL) {
+	rc = paint_show(req);
+	if (rc == -2)
+		return (1);
+	if (rc != 0) {
 		fprintf(stderr, "bosd: cannot load icon '%s'\n", req->spec);
 		return (1);
 	}
-	paint_icon(ic, req);
 	if (req->gauge >= 0) {
 		bar_show(req);
 		bdl = req->gauge_hold < 0.0 ? -1.0 :
@@ -415,7 +423,7 @@ show_once(const struct show_req *req)
 			XNextEvent(dpy, &ev);
 			if (ev.type == Expose && ev.xexpose.count == 0 &&
 			    mdl != 0.0)
-				paint_icon(ic, req);
+				paint_show(req);
 		}
 		poll(NULL, 0, 50);
 	}

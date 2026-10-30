@@ -21,6 +21,32 @@ static XftDraw	*draw;
 static int	 stroke, cstroke;
 static int	 lock_len, lock_x, lock_bx;
 static double	 fill_alpha = 1.0, outline_alpha = 1.0;
+
+struct cd_slot {
+	XftDraw	*draw;
+	XftFont	*font, *bfont, *cfont;
+	int	 stroke, cstroke;
+	int	 lock_len, lock_x, lock_bx;
+	int	 panel;
+};
+
+static struct cd_slot cds[BOSD_SCREEN_SLOTS];
+static int cd_n;
+
+static void
+cd_bind(int i)
+{
+	overlay_select(cds[i].panel);
+	draw = cds[i].draw;
+	font = cds[i].font;
+	bfont = cds[i].bfont;
+	cfont = cds[i].cfont;
+	stroke = cds[i].stroke;
+	cstroke = cds[i].cstroke;
+	lock_len = cds[i].lock_len;
+	lock_x = cds[i].lock_x;
+	lock_bx = cds[i].lock_bx;
+}
 static char	 text_buf[BOSD_SPEC_MAX];
 static char	 text_color[BOSD_COLOR_MAX];	/* -c/-T fill */
 static char	 badge_color[BOSD_COLOR_MAX];
@@ -162,8 +188,8 @@ draw_caps(const struct show_req *req, int y)
 }
 
 /* Size the overlay to the panel and stand up fonts, draw, colors. */
-int
-countdown_begin(const struct show_req *req)
+static int
+countdown_begin_one(const struct show_req *req)
 {
 	int screen = DefaultScreen(dpy), pointsize;
 
@@ -229,8 +255,44 @@ countdown_begin(const struct show_req *req)
 	return (0);
 }
 
-void
-countdown_tick(const struct show_req *req, int digit)
+int
+countdown_begin(const struct show_req *req)
+{
+	int i, n;
+
+	countdown_end();
+	if (screen_prepare(req->screen) != 0)
+		return (-1);
+	n = screen_count();
+	cd_n = 0;
+	for (i = 0; i < n; i++) {
+		screen_use(i);
+		if (countdown_begin_one(req) != 0) {
+			countdown_end();
+			return (-1);
+		}
+		cds[cd_n].draw = draw;
+		cds[cd_n].font = font;
+		cds[cd_n].bfont = bfont;
+		cds[cd_n].cfont = cfont;
+		cds[cd_n].stroke = stroke;
+		cds[cd_n].cstroke = cstroke;
+		cds[cd_n].lock_len = 0;
+		cds[cd_n].lock_x = 0;
+		cds[cd_n].lock_bx = 0;
+		cds[cd_n].panel = screen_slot(i);
+		draw = NULL;
+		font = NULL;
+		bfont = NULL;
+		cfont = NULL;
+		cd_n++;
+	}
+	overlay_hide_untargeted();
+	return (0);
+}
+
+static void
+countdown_tick_one(const struct show_req *req, int digit)
 {
 	XGlyphInfo extents, ref;
 	XftColor clear;
@@ -288,9 +350,23 @@ countdown_tick(const struct show_req *req, int digit)
 	XFlush(dpy);
 }
 
-/* One centered render of the decoded text (e.g. the checkmark). */
 void
-text_tick(const struct show_req *req)
+countdown_tick(const struct show_req *req, int digit)
+{
+	int i;
+
+	for (i = 0; i < cd_n; i++) {
+		cd_bind(i);
+		countdown_tick_one(req, digit);
+		cds[i].lock_len = lock_len;
+		cds[i].lock_x = lock_x;
+		cds[i].lock_bx = lock_bx;
+	}
+}
+
+/* One centered render of the decoded text (e.g. the checkmark). */
+static void
+text_tick_one(const struct show_req *req)
 {
 	XGlyphInfo extents;
 	XftColor clear;
@@ -322,7 +398,18 @@ text_tick(const struct show_req *req)
 }
 
 void
-countdown_end(void)
+text_tick(const struct show_req *req)
+{
+	int i;
+
+	for (i = 0; i < cd_n; i++) {
+		cd_bind(i);
+		text_tick_one(req);
+	}
+}
+
+static void
+cd_free_globals(void)
 {
 	if (draw != NULL) {
 		XftDrawDestroy(draw);
@@ -340,6 +427,27 @@ countdown_end(void)
 		XftFontClose(dpy, font);
 		font = NULL;
 	}
+}
+
+void
+countdown_end(void)
+{
+	int i;
+
+	cd_free_globals();
+	for (i = 0; i < cd_n; i++) {
+		if (cds[i].draw != NULL)
+			XftDrawDestroy(cds[i].draw);
+		if (cds[i].bfont != NULL)
+			XftFontClose(dpy, cds[i].bfont);
+		if (cds[i].cfont != NULL)
+			XftFontClose(dpy, cds[i].cfont);
+		if (cds[i].font != NULL)
+			XftFontClose(dpy, cds[i].font);
+		memset(&cds[i], 0, sizeof(cds[i]));
+	}
+	cd_n = 0;
+	lock_len = 0;
 }
 
 /* After the artwork comes down, let a gauge finish its own hold. */

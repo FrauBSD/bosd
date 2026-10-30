@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/README.md 2026-10-29 16:19:12 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/README.md 2026-10-30 11:12:58 -0700 Devin Teske $)
 
 # bosd
 
@@ -9,7 +9,8 @@ the kind a desktop environment shows for media keys and hotkeys: a
 PNG glyph, or giant countdown digits, or large outlined text (e.g.
 a checkmark), or small caption text (a screenshot's filename), or
 a gauge bar (the classic xosd tick look) at the panel bottom in a
-centered ARGB32 overlay on the primary or internal panel. A warm
+centered ARGB32 overlay on the primary or internal panel
+(`-S` names another output, or `all` for every connected output). A warm
 daemon per channel keeps everything on screen and repaints in
 place, so rapid toggles never flash; the gauge and the artwork run
 independent timers and coexist. When a daemon is warm, a client
@@ -62,6 +63,7 @@ not paint locally when no daemon is running.
 
 ```sh
 bosd -n airplane -d &            # warm the channel at session start
+bosd -n airplane -S eDP-1 -d &   # same, but default new shows to eDP-1
 bosd -n airplane airplane-on 1.5 # show a glyph for 1.5 s
 bosd -n audio -b 2 audio-headphones 1.5 # superscript badge upper-right
 bosd -n audio -y -20 audio-speakers     # shift up 20 px (positive = down)
@@ -79,6 +81,8 @@ bosd -n shot -F orange -t saved         # small text, another color
 bosd -n audio audio-speakers -1         # hold until -C or replaced
 bosd -n shot -C                         # clear the channel's active render
 bosd -D audio-speakers 1                # render directly, skip the daemon
+bosd -n audio -S DP-4 audio-speakers 1  # that output, not the primary
+bosd -S all -c 3                        # countdown on every output
 bosd -p 'Shutdown in' -b s -c 10        # caption over a 10 s countdown
 bosd -n airplane -a 'airplane mode off' airplane-off  # caption below
 bosd -n volume -g 45                    # gauge bar, 45%, default green
@@ -165,7 +169,8 @@ that do not borrow each other's air (center piece, bottom tick band,
 caption stack clear of the gauge), each with its own hold, so volume
 can linger on the bar while mute expires on its own clock.
 Replace-in-place under rapid chords. No flash. No respawn lottery.
-Click-through. RandR-honest about the primary or internal panel.
+Click-through. RandR-honest about the primary or internal panel,
+a named output, or every output at once.
 Greeter, game, ordinary session; WM-agnostic on purpose.
 
 Geometry belongs to the panel height, not to a magic constant in a
@@ -221,8 +226,9 @@ in that `$DISPLAY` again).
   the same dialect under any window manager.
 - Libraries (libxosd, libaosd) want a C caller. `bosd` is a shell
   one-liner or a `libbosd` client against the same API.
-  RandR-aware: centered on the primary or internal panel, correct
-  on rotated and multi-head layouts.
+  RandR-aware: centered on the primary or internal panel by default,
+  on a named output, or on every connected output; correct on rotated
+  and multi-head layouts.
 
 ## Authoring glyphs
 

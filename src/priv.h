@@ -36,8 +36,17 @@ struct icon {
 	double		 alpha;
 	double		 outline_alpha;
 	int		 outline;
+	int		 px; /* panel-derived icon_px this bitmap used */
 	int		 w, h;
 };
+
+/*
+ * One overlay slot per connected output, plus one for the whole
+ * X screen when no output is connected.  Windows for a show are
+ * indexed by these slots so "all" can paint every output at once.
+ */
+#define BOSD_OUTPUT_MAX		16
+#define BOSD_SCREEN_SLOTS	(BOSD_OUTPUT_MAX + 1)
 
 /* Channel name shared with libbosd (bosd -n / bosd_set_instance). */
 extern char	 instance[BOSD_INSTANCE_MAX];
@@ -54,12 +63,24 @@ extern int	 win_w, win_h;
 extern int	 icon_ox, icon_oy;
 
 void	 refresh_screen_geom(void);
+void	 overlay_select(int slot);
+void	 overlay_hide_untargeted(void);
 int	 init_display(void);
 int	 layout_fullscreen(void);
 void	 raise_overlay(void);
-void	 paint_icon(const struct icon *, const struct show_req *);
+int	 paint_show(const struct show_req *);
 void	 hide_overlay(void);
 void	 x11_cleanup(void);
+
+/* screen.c */
+void	 screen_set_default(const char *name);
+void	 screen_apply_default(struct show_req *req);
+void	 screen_check_default(void);
+int	 screen_prepare(const char *sel);
+int	 screen_count(void);
+int	 screen_slot(int i);
+int	 screen_targeted(int slot);
+void	 screen_use(int i);
 
 /* osd_chrome.c */
 Visual	*find_argb_visual(int *depth_out);

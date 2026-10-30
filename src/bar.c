@@ -29,6 +29,59 @@ static Visual	*bvisual;
 static int	 bdepth;
 static int	 bmapped;
 
+struct bar_slot {
+	Window		 win;
+	Pixmap		 pix;
+	Colormap	 cmap;
+	Visual		*visual;
+	int		 depth;
+	int		 mapped;
+};
+
+static struct bar_slot bslot[BOSD_SCREEN_SLOTS];
+static int bcur = -1;
+
+static void	 bar_drop_window(void);
+
+static void
+bar_store(void)
+{
+	struct bar_slot *s;
+
+	if (bcur < 0)
+		return;
+	s = &bslot[bcur];
+	s->win = bwin;
+	s->pix = bpix;
+	s->cmap = bcmap;
+	s->visual = bvisual;
+	s->depth = bdepth;
+	s->mapped = bmapped;
+}
+
+static void
+bar_load(int slot)
+{
+	struct bar_slot *s = &bslot[slot];
+
+	bwin = s->win;
+	bpix = s->pix;
+	bcmap = s->cmap;
+	bvisual = s->visual;
+	bdepth = s->depth;
+	bmapped = s->mapped;
+}
+
+static void
+bar_select(int slot)
+{
+	if (slot < 0 || slot >= BOSD_SCREEN_SLOTS || slot == bcur)
+		return;
+	bar_store();
+	bcur = slot;
+	bar_load(slot);
+}
+
 static Window
 bar_window(int x, int y, int w, int h)
 {
@@ -180,8 +233,8 @@ bar_prepare_surface(const struct bar_geom *m, int x, int y, int w,
 	return (0);
 }
 
-int
-bar_show(const struct show_req *req)
+static int
+bar_show_one(const struct show_req *req)
 {
 	const struct bar_geom *m;
 	const char *face, *pfx, *apx;
@@ -198,7 +251,6 @@ bar_show(const struct show_req *req)
 	 * size that face, not the gauge labels).  -s always scales
 	 * the bar's panel-derived tick geometry.
 	 */
-	refresh_screen_geom();
 	alone = req->spec[0] == '\0' && req->count == 0 && !req->text &&
 	    !req->small;
 	bar_geom_set_scale(req->scale);
@@ -247,6 +299,32 @@ bar_show(const struct show_req *req)
 	return (0);
 }
 
+int
+bar_show(const struct show_req *req)
+{
+	int i, n, ok = 0;
+
+	if (screen_prepare(req->screen) != 0)
+		return (-1);
+	n = screen_count();
+	for (i = 0; i < n; i++) {
+		screen_use(i);
+		bar_select(screen_slot(i));
+		if (bar_show_one(req) == 0)
+			ok = 1;
+	}
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		if (screen_targeted(i))
+			continue;
+		bar_select(i);
+		if (bwin != 0 || bmapped)
+			bar_drop_window();
+		bmapped = 0;
+	}
+	bar_store();
+	return (ok ? 0 : -1);
+}
+
 static void
 bar_drop_window(void)
 {
@@ -270,16 +348,21 @@ bar_drop_window(void)
 void
 bar_hide(void)
 {
-	if (bmapped) {
-		XUnmapWindow(dpy, bwin);
-		bmapped = 0;
-	}
+	int i;
+
 	/*
 	 * Destroy the window so a later show cannot remap a compositor-
 	 * cached frame of the previous fill (seen as the last percent
 	 * after the bar had already timed out).
 	 */
-	bar_drop_window();
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		bar_select(i);
+		if (bmapped && bwin != 0)
+			XUnmapWindow(dpy, bwin);
+		bmapped = 0;
+		bar_drop_window();
+	}
+	bar_store();
 	XSync(dpy, False);
 }
 
@@ -288,9 +371,8 @@ bar_cleanup(void)
 {
 	if (dpy == NULL)
 		return;
-	bar_drop_window();
+	bar_hide();
 	bar_font_cleanup();
-	bmapped = 0;
 }
 
 /* One-shot fallback: no daemon on the channel, draw it ourselves. */

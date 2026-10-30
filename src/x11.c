@@ -8,7 +8,6 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <X11/extensions/Xrandr.h>
 #include <X11/extensions/Xrender.h>
 
 #include "priv.h"
@@ -27,6 +26,115 @@ static GC gc;
 static int scr_depth = 32;
 static int win_x, win_y;
 
+/* Per-output overlay.  Globals above are the slot overlay_select loaded. */
+struct ovl {
+	Window		 win;
+	Visual		*visual;
+	Colormap	 cmap;
+	GC		 gc;
+	int		 depth;
+	int		 mapped;
+	int		 win_x, win_y, win_w, win_h;
+	int		 icon_ox, icon_oy;
+};
+
+static struct ovl ovl[BOSD_SCREEN_SLOTS];
+static int ovl_i = -1;
+
+static void
+ovl_store(void)
+{
+	struct ovl *o;
+
+	if (ovl_i < 0)
+		return;
+	o = &ovl[ovl_i];
+	o->win = win;
+	o->visual = visual;
+	o->cmap = cmap;
+	o->gc = gc;
+	o->depth = scr_depth;
+	o->mapped = mapped;
+	o->win_x = win_x;
+	o->win_y = win_y;
+	o->win_w = win_w;
+	o->win_h = win_h;
+	o->icon_ox = icon_ox;
+	o->icon_oy = icon_oy;
+}
+
+static void
+ovl_load(int slot)
+{
+	struct ovl *o = &ovl[slot];
+
+	win = o->win;
+	visual = o->visual;
+	cmap = o->cmap;
+	gc = o->gc;
+	scr_depth = o->depth != 0 ? o->depth : 32;
+	mapped = o->mapped;
+	win_x = o->win_x;
+	win_y = o->win_y;
+	win_w = o->win_w;
+	win_h = o->win_h;
+	icon_ox = o->icon_ox;
+	icon_oy = o->icon_oy;
+}
+
+void
+overlay_select(int slot)
+{
+	if (slot < 0 || slot >= BOSD_SCREEN_SLOTS || slot == ovl_i)
+		return;
+	ovl_store();
+	ovl_i = slot;
+	ovl_load(slot);
+}
+
+static void
+ovl_drop(void)
+{
+	if (dpy == NULL)
+		return;
+	if (gc != None) {
+		XFreeGC(dpy, gc);
+		gc = None;
+	}
+	if (win != 0) {
+		XDestroyWindow(dpy, win);
+		win = 0;
+	}
+	if (cmap != 0) {
+		XFreeColormap(dpy, cmap);
+		cmap = 0;
+	}
+	visual = NULL;
+	mapped = 0;
+	win_w = 0;
+	win_h = 0;
+	win_x = 0;
+	win_y = 0;
+}
+
+/* Drop overlays the current show does not use, so a move off "all" clears. */
+void
+overlay_hide_untargeted(void)
+{
+	int i;
+
+	if (dpy == NULL)
+		return;
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		if (screen_targeted(i))
+			continue;
+		overlay_select(i);
+		if (win != 0)
+			ovl_drop();
+	}
+	ovl_store();
+}
+
 /* XRender ARGB32 is premultiplied; scale each color by its alpha. */
 static uint32_t
 pack_argb32(unsigned char r, unsigned char g, unsigned char b,
@@ -39,75 +147,16 @@ pack_argb32(unsigned char r, unsigned char g, unsigned char b,
 }
 
 /*
- * Center on the primary output; fall back to the first connected
- * internal panel (eDP/LVDS/DSI), then the whole X screen.
+ * Default output (primary, else internal panel, else the whole X
+ * screen).  A show that names -S calls screen_prepare itself.
  */
 void
 refresh_screen_geom(void)
 {
-	Window root;
-	XRRScreenResources *res;
-	RROutput primary;
-	XRROutputInfo *oi;
-	XRRCrtcInfo *ci;
-	int screen, i;
-
-	screen = DefaultScreen(dpy);
-	root = RootWindow(dpy, screen);
-	scr_x = 0;
-	scr_y = 0;
-	scr_w = DisplayWidth(dpy, screen);
-	scr_h = DisplayHeight(dpy, screen);
-
-	res = XRRGetScreenResourcesCurrent(dpy, root);
-	if (res == NULL)
+	if (screen_prepare(NULL) != 0)
 		return;
-
-	primary = XRRGetOutputPrimary(dpy, root);
-	if (primary == None) {
-		for (i = 0; i < res->noutput; i++) {
-			oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
-			if (oi == NULL)
-				continue;
-			if (oi->connection == RR_Connected &&
-			    oi->crtc != None &&
-			    (strncmp(oi->name, "eDP", 3) == 0 ||
-			     strncmp(oi->name, "LVDS", 4) == 0 ||
-			     strncmp(oi->name, "DSI", 3) == 0)) {
-				primary = res->outputs[i];
-				XRRFreeOutputInfo(oi);
-				break;
-			}
-			XRRFreeOutputInfo(oi);
-		}
-	}
-	if (primary != None) {
-		oi = XRRGetOutputInfo(dpy, res, primary);
-		if (oi != NULL && oi->crtc != None) {
-			ci = XRRGetCrtcInfo(dpy, res, oi->crtc);
-			if (ci != NULL) {
-				scr_x = (int)ci->x;
-				scr_y = (int)ci->y;
-				scr_w = (int)ci->width;
-				scr_h = (int)ci->height;
-				XRRFreeCrtcInfo(ci);
-			}
-		}
-		if (oi != NULL)
-			XRRFreeOutputInfo(oi);
-	}
-	XRRFreeScreenResources(res);
-
-	icon_px = scr_h / 4;
-	if (icon_px > 320)
-		icon_px = 320;
-	if (icon_px < 160)
-		icon_px = 160;
-	icon_pad = icon_px / 22;
-	if (icon_pad < 12)
-		icon_pad = 12;
-	if (icon_pad > 24)
-		icon_pad = 24;
+	if (screen_count() > 0)
+		screen_use(0);
 }
 
 
@@ -171,7 +220,6 @@ layout_window(const struct icon *ic, const struct show_req *req)
 	int pad_left, pad_right, pad_top, pad_bot;
 	int blen, w, h, x, y, cap_w, cw, ch;
 
-	refresh_screen_geom();
 	blen = (int)strlen(req->badge);
 	pad_left = icon_px / 12;
 	pad_bot = icon_px / 12;
@@ -258,7 +306,6 @@ layout_window(const struct icon *ic, const struct show_req *req)
 int
 layout_fullscreen(void)
 {
-	refresh_screen_geom();
 	icon_ox = 0;
 	icon_oy = 0;
 	return (place_window(scr_x, scr_y, scr_w, scr_h));
@@ -327,17 +374,28 @@ raise_overlay(void)
 	raise_mapped(win, &mapped);
 }
 
-void
-paint_icon(const struct icon *ic, const struct show_req *req)
+/* Unmap this slot only.  A clipped panel must not hide the others. */
+static void
+hide_current(void)
+{
+	if (win != 0 && mapped) {
+		XUnmapWindow(dpy, win);
+		mapped = 0;
+	}
+}
+
+/* 0 painted or clipped, -1 if the window could not be created. */
+static int
+paint_icon_one(const struct icon *ic, const struct show_req *req)
 {
 	int vis;
 
 	vis = layout_window(ic, req);
 	if (vis < 0)
-		return;
+		return (-1);
 	if (vis > 0) {
-		hide_overlay();
-		return;
+		hide_current();
+		return (0);
 	}
 
 	raise_overlay();
@@ -353,16 +411,57 @@ paint_icon(const struct icon *ic, const struct show_req *req)
 		draw_caption(req->append, caption_px(ic),
 		    icon_oy + ic->h, 1, req->font);
 	XSync(dpy, False);
+	return (0);
+}
+
+/*
+ * Paint req on each selected output.  Returns 0 when at least one
+ * panel was drawn, -1 when the icon could not be loaded, -2 when
+ * the named output is not connected.
+ */
+int
+paint_show(const struct show_req *req)
+{
+	int i, n, ok = 0;
+
+	if (screen_prepare(req->screen) != 0)
+		return (-2);
+	n = screen_count();
+	for (i = 0; i < n; i++) {
+		struct icon *ic;
+
+		screen_use(i);
+		ic = icon_lookup(req->spec, req->scale, req->alpha,
+		    req->outline_alpha, req->outline);
+		if (ic == NULL)
+			continue;
+		if (paint_icon_one(ic, req) == 0)
+			ok = 1;
+	}
+	if (!ok)
+		return (-1);
+	overlay_hide_untargeted();
+	return (0);
 }
 
 void
 hide_overlay(void)
 {
-	if (mapped) {
-		XUnmapWindow(dpy, win);
-		mapped = 0;
-		XSync(dpy, False);
+	int i, any = 0;
+
+	if (dpy == NULL)
+		return;
+	for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+		overlay_select(i);
+		if (win != 0 && mapped) {
+			XUnmapWindow(dpy, win);
+			mapped = 0;
+			any = 1;
+		}
 	}
+	ovl_store();
+	if (any)
+		XSync(dpy, False);
 }
 
 static int
@@ -390,19 +489,14 @@ x11_cleanup(void)
 	badge_cleanup();
 	bar_cleanup();
 	stext_cleanup();
-	if (dpy != NULL && gc != None) {
-		XFreeGC(dpy, gc);
-		gc = None;
-	}
-	if (dpy != NULL && win != 0) {
-		XDestroyWindow(dpy, win);
-		win = 0;
-	}
-	if (dpy != NULL && cmap != 0) {
-		XFreeColormap(dpy, cmap);
-		cmap = 0;
-	}
 	if (dpy != NULL) {
+		int i;
+
+		for (i = 0; i < BOSD_SCREEN_SLOTS; i++) {
+			overlay_select(i);
+			ovl_drop();
+		}
+		ovl_store();
 		XCloseDisplay(dpy);
 		dpy = NULL;
 	}

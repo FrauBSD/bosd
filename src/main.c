@@ -14,27 +14,31 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-	    "Usage: bosd [-hv] [-n instance] { -d | -C }\n"
+	    "Usage: bosd [-hv] [-n instance] [-S screen] -d\n"
+	    "       bosd [-hv] [-n instance] -C\n"
 	    "       bosd [-CDhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
 	    "            [-b badge] [-F color] [-f font] [-G color] "
 	    "[-g percent] \\\n"
-	    "            [-O opacity] [-P percent] [-p text] [-s scale] "
-	    "[-x offset] \\\n"
-	    "            [-y offset] { icon | -c countdown | -T text } "
-	    "[hold_seconds]\n"
+	    "            [-O opacity] [-P percent] [-p text] [-S screen] "
+	    "[-s scale] \\\n"
+	    "            [-x offset] [-y offset] "
+	    "{ icon | -c countdown | -T text } \\\n"
+	    "            [hold_seconds]\n"
 	    "       bosd [-CDhov] [-n instance] [-A opacity] [-B seconds] "
 	    "[-F color] \\\n"
 	    "            [-f font] [-G color] [-g percent] [-O opacity] "
 	    "[-P percent] \\\n"
-	    "            [-s scale] [-x offset] [-y offset] -t text "
-	    "[hold_seconds]\n"
+	    "            [-S screen] [-s scale] [-x offset] [-y offset] "
+	    "-t text \\\n"
+	    "            [hold_seconds]\n"
 	    "       bosd [-CDhov] [-n instance] [-A opacity] [-a text] "
 	    "[-B seconds] \\\n"
 	    "            [-F color] [-f font] [-G color] [-O opacity] "
 	    "[-P percent] \\\n"
-	    "            [-p text] [-s scale] [-x offset] [-y offset] "
-	    "-g percent\n");
+	    "            [-p text] [-S screen] [-s scale] [-x offset] "
+	    "[-y offset] \\\n"
+	    "            -g percent\n");
 	exit(1);
 }
 
@@ -96,7 +100,7 @@ main(int argc, char **argv)
 	req.gauge_hold = BOSD_GAUGE_HOLD_DEF;
 
 	while ((ch = getopt(argc, argv,
-	    "A:B:CDF:G:O:P:Ta:b:c:df:g:hn:op:s:tvx:y:")) != -1) {
+	    "A:B:CDF:G:O:P:S:Ta:b:c:df:g:hn:op:s:tvx:y:")) != -1) {
 		switch (ch) {
 		case 'A': {
 			char *ep;
@@ -250,6 +254,17 @@ main(int argc, char **argv)
 			}
 			strlcpy(req.prefix, optarg, sizeof(req.prefix));
 			break;
+		case 'S':
+			if (optarg[0] == '\0' ||
+			    strlen(optarg) >= sizeof(req.screen) ||
+			    optarg[strcspn(optarg, " \t\n")] != '\0') {
+				fprintf(stderr, "bosd: -S screen must be "
+				    "1 to %zu characters\n",
+				    sizeof(req.screen) - 1);
+				usage();
+			}
+			strlcpy(req.screen, optarg, sizeof(req.screen));
+			break;
 		case 's':
 			req.scale = atof(optarg);
 			if (req.scale < BOSD_SCALE_MIN ||
@@ -305,6 +320,7 @@ main(int argc, char **argv)
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
+		screen_set_default(req.screen);
 		return (run_daemon());
 	}
 
@@ -330,8 +346,8 @@ main(int argc, char **argv)
 			    req.alpha >= 0.0 ||
 			    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 			    !req.outline || req.x_off != 0 ||
-			    req.y_off != 0 || Bflag || Pflag ||
-			    req.color[0] != '\0')
+			    req.y_off != 0 || req.screen[0] != '\0' ||
+			    Bflag || Pflag || req.color[0] != '\0')
 				usage();
 			if (daemon_alive())
 				return (send_clear() != 0);

@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-10-22 10:01:45 -0700 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-10-30 11:12:58 -0700 Devin Teske $
 #
 ############################################################ OPTIONS
 
@@ -64,7 +64,7 @@ LDLIBS=		${PKG_LIBS}
 
 ############################################################ FILES
 
-PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c \
+PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c src/screen.c \
 		src/osd_chrome.c src/draw_utf8.c src/badge.c \
 		src/bar_geom.c src/bar_paint.c src/bar.c \
 		src/countdown.c src/stext_paint.c src/stext.c
