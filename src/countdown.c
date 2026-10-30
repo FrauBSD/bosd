@@ -437,8 +437,23 @@ countdown_end(void)
 {
 	int i;
 
-	cd_free_globals();
+	/*
+	 * cd_bind leaves the globals aliased at the slot that just
+	 * painted.  Clear that alias before the slots are freed, or
+	 * the same XftDraw is destroyed twice (the second call reads
+	 * freed memory and SIGBUS in XRenderFindDisplay).  Anything
+	 * still in the globals was a begin that failed before the
+	 * slot was stored.
+	 */
 	for (i = 0; i < cd_n; i++) {
+		if (draw == cds[i].draw)
+			draw = NULL;
+		if (font == cds[i].font)
+			font = NULL;
+		if (bfont == cds[i].bfont)
+			bfont = NULL;
+		if (cfont == cds[i].cfont)
+			cfont = NULL;
 		if (cds[i].draw != NULL)
 			XftDrawDestroy(cds[i].draw);
 		if (cds[i].bfont != NULL)
@@ -450,6 +465,7 @@ countdown_end(void)
 		memset(&cds[i], 0, sizeof(cds[i]));
 	}
 	cd_n = 0;
+	cd_free_globals();
 	lock_len = 0;
 }
 
