@@ -104,9 +104,12 @@ ref_digit_extents(XGlyphInfo *ref)
 }
 
 /*
- * Largest tabular bold face that fits the panel with outline air
+ * Largest bold face that fits the panel with outline air
  * (width-checked against fit_text when given, the widest glyph slot
- * otherwise).
+ * otherwise).  DejaVu Sans figures are already tabular.  A tabular
+ * element is not a fontconfig property: FcNameParse rejects the
+ * pattern, XftFontOpenName fails, and the Sans fallback has no
+ * U+2713 (drawn as the missing-glyph box).
  */
 static XftFont *
 open_fit_font(int screen, int w, int h, int *pointsize,
@@ -121,7 +124,7 @@ open_fit_font(int screen, int w, int h, int *pointsize,
 	while (ps >= 16) {
 		s = stroke_for(ps);
 		snprintf(attrs, sizeof(attrs),
-		    "bold:size=%d:antialias=true:tabular=1", ps);
+		    "bold:size=%d:antialias=true", ps);
 		font_pattern(pattern, sizeof(pattern), face, "DejaVu Sans",
 		    attrs);
 		f = XftFontOpenName(dpy, screen, pattern);

@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-30 11:12:58 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-30 12:38:07 -0700 Devin Teske $)
 
 # Changelog
 
@@ -10,6 +10,7 @@ the repository for 1.0).
 
 - Allow literal whitespace in -t/-T/-b; keep \xNN / \u / \U escapes
 - Add -S to choose an output; all copies the show onto every output
+- Open the -c/-T face without a tabular element (U+2713 was a missing-glyph box)
 
 ## 10.6 (2026-10-22)
 
