@@ -360,6 +360,8 @@ main(int argc, char **argv)
 		if (!set.screen)
 			bosd_conf_apply_screen(&cf, &req);
 		screen_set_default(req.screen);
+		if (set.screen)
+			screen_fix_default();
 		return (run_daemon());
 	}
 

@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 12:33:03 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 12:37:15 -0800 Devin Teske $)
 
 # Changelog
 
@@ -16,6 +16,8 @@ the repository for 1.0).
 - bosd-start -n starts that instance when it is not already
   running, and returns when it is. -h or an unknown option prints
   usage.
+- SIGHUP makes a daemon re-read bosd.conf. The screen from -S is
+  kept. A broken file leaves the screen already in use.
 
 ## 10.8 (2026-10-31)
 

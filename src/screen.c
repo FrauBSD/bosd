@@ -30,6 +30,7 @@ static int	 targets[BOSD_SCREEN_SLOTS];
 static int	 ntargets;
 static unsigned char targeted[BOSD_SCREEN_SLOTS];
 static char	 daemon_screen[BOSD_SCREEN_MAX];
+static int	 daemon_screen_fixed;	/* -S on the daemon command */
 static char	 warned[BOSD_SCREEN_MAX];
 
 static void
@@ -141,6 +142,18 @@ screen_set_default(const char *name)
 		daemon_screen[0] = '\0';
 	else
 		strlcpy(daemon_screen, name, sizeof(daemon_screen));
+}
+
+void
+screen_fix_default(void)
+{
+	daemon_screen_fixed = 1;
+}
+
+int
+screen_default_fixed(void)
+{
+	return (daemon_screen_fixed);
 }
 
 void

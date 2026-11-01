@@ -321,6 +321,12 @@ With no
 that screen comes from
 .Xr bosd.conf 5
 when the file sets one, otherwise the primary.
+.Dv SIGHUP
+re-reads that file.
+The screen from
+.Fl S
+is kept.
+A broken file leaves the screen already in use.
 .It Fl F Ar color
 Fill text and badges with
 .Ar color ,

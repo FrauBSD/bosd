@@ -20,8 +20,10 @@
 #include <sys/un.h>
 
 #include "priv.h"
+#include "conf.h"
 
 volatile sig_atomic_t stop;
+static volatile sig_atomic_t hup;
 int sock = -1;
 
 /* Main-show slot (icon, countdown, large text). */
@@ -291,6 +293,43 @@ drain_socket(int sockfd)
 }
 
 static void
+on_hup(int sig __unused)
+{
+	hup = 1;
+}
+
+/* signal(3) sets SA_RESTART, which would leave poll asleep. */
+static void
+arm_hup(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = on_hup;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	(void)sigaction(SIGHUP, &sa, NULL);
+}
+
+/*
+ * Screen is the setting this process keeps. A flag on the command
+ * line stays. A broken file leaves the screen already in use. A
+ * missing file is the primary, unless that command line set -S.
+ */
+static void
+reread_conf(void)
+{
+	struct bosd_conf cf;
+
+	hup = 0;
+	if (bosd_conf_load(&cf) != 0)
+		return;
+	if (screen_default_fixed())
+		return;
+	screen_set_default(cf.screen_set ? cf.screen : NULL);
+}
+
+static void
 service_x(void)
 {
 	while (dpy != NULL && XPending(dpy) > 0) {
@@ -310,7 +349,7 @@ run_daemon(void)
 
 	signal(SIGTERM, cleanup);
 	signal(SIGINT, cleanup);
-	signal(SIGHUP, cleanup);
+	arm_hup();
 
 	if (init_display() != 0)
 		return (1);
@@ -339,11 +378,15 @@ run_daemon(void)
 	while (!stop) {
 		struct pollfd pfd;
 		double now;
+		int n;
 
 		pfd.fd = sock;
 		pfd.events = POLLIN;
-		if (poll(&pfd, 1, next_timeout()) < 0 && errno != EINTR)
+		n = poll(&pfd, 1, next_timeout());
+		if (n < 0 && errno != EINTR)
 			break;
+		while (hup)
+			reread_conf();
 
 		/*
 		 * Expire before drain so a datagram that arrives on the
@@ -363,7 +406,7 @@ run_daemon(void)
 		if (s_active && s_deadline >= 0.0 && now >= s_deadline)
 			stext_stop();
 
-		if (pfd.revents & POLLIN)
+		if (n > 0 && (pfd.revents & POLLIN))
 			drain_socket(sock);
 
 		service_x();

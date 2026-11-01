@@ -74,6 +74,8 @@ void	 x11_cleanup(void);
 
 /* screen.c */
 void	 screen_set_default(const char *name);
+void	 screen_fix_default(void);
+int	 screen_default_fixed(void);
 void	 screen_apply_default(struct show_req *req);
 void	 screen_check_default(void);
 int	 screen_prepare(const char *sel);

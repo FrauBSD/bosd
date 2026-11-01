@@ -84,9 +84,12 @@ force: that process's
 .Fl S ,
 or
 .Sy screen
-as of when the daemon started, or the primary.
-Restart the daemon after changing
-.Sy screen .
+from the file, or the primary.
+The daemon reads the file when it starts and on
+.Dv SIGHUP .
+.Fl S
+on the daemon is not replaced by the file.
+A broken file leaves the screen already in use.
 .Pp
 A local show
 .Po
