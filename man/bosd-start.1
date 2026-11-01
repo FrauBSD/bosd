@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd September 29, 2026
+.Dd November 1, 2026
 .Dt BOSD-START 1
 .Os
 .Sh NAME
@@ -96,8 +96,22 @@ exists, the daemon is given that directory.
 Otherwise
 .Nm bosd
 uses the icon directory it was built with.
+.Ev BOSD_CONF ,
+when set and not empty, is the defaults file that daemon reads.
+Unset or empty, the file is the one
+.Nm bosd
+was built with.
+A missing file is valid.
 .Sh ENVIRONMENT
-.Bl -tag -width "BOSD_PATH"
+.Bl -tag -width "BOSD_CONF"
+.It Ev BOSD_CONF
+Path of the defaults file inherited by the daemon.
+Unset or empty is the path
+.Nm bosd
+was built with.
+A missing file is valid.
+See
+.Xr bosd.conf 5 .
 .It Ev BOSD_PATH
 Colon-separated icon search path handed to the daemon.
 When unset,
@@ -124,6 +138,7 @@ daemon pid
 .Sh EXIT STATUS
 .Ex -std
 .Sh SEE ALSO
-.Xr bosd 1
+.Xr bosd 1 ,
+.Xr bosd.conf 5
 .Sh AUTHORS
 .An Devin Teske Aq Mt dteske@FreeBSD.org
