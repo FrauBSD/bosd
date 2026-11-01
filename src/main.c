@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "priv.h"
+#include "conf.h"
 
 static void
 usage(void)
@@ -105,10 +106,13 @@ int
 main(int argc, char **argv)
 {
 	struct show_req req;
+	struct bosd_conf cf;
+	struct bosd_optset set;
 	int ch, count = 0, Bflag = 0, Cflag = 0, Dflag = 0, Tflag = 0;
 	int dflag = 0, tflag = 0, Pflag = 0;
 
 	memset(&req, 0, sizeof(req));
+	memset(&set, 0, sizeof(set));
 	req.hold = BOSD_HOLD_DEF;
 	req.scale = 1.0;
 	req.alpha = BOSD_ALPHA_NATIVE;
@@ -124,6 +128,7 @@ main(int argc, char **argv)
 		case 'A': {
 			char *ep;
 
+			set.alpha = 1;
 			errno = 0;
 			req.alpha = strtod(optarg, &ep);
 			if (ep == optarg || *ep != '\0' || errno != 0 ||
@@ -138,11 +143,13 @@ main(int argc, char **argv)
 		}
 		case 'B':
 			Bflag = 1;
+			set.gauge_hold = 1;
 			req.gauge_hold = parse_hold(optarg);
 			break;
 		case 'O': {
 			char *ep;
 
+			set.outline_alpha = 1;
 			errno = 0;
 			req.outline_alpha = strtod(optarg, &ep);
 			if (ep == optarg || *ep != '\0' || errno != 0 ||
@@ -162,6 +169,7 @@ main(int argc, char **argv)
 			char *ep;
 			long v;
 
+			set.gauge_prev = 1;
 			errno = 0;
 			v = strtol(optarg, &ep, 10);
 			if (ep == optarg || *ep != '\0' || errno != 0 ||
@@ -187,6 +195,7 @@ main(int argc, char **argv)
 			Dflag = 1;	/* render directly, skip daemon */
 			break;
 		case 'F':
+			set.text_color = 1;
 			if (strlen(optarg) >= sizeof(req.tcolor)) {
 				fprintf(stderr, "bosd: -F color must be "
 				    "at most %zu characters\n",
@@ -196,6 +205,7 @@ main(int argc, char **argv)
 			strlcpy(req.tcolor, optarg, sizeof(req.tcolor));
 			break;
 		case 'f':
+			set.font = 1;
 			if (optarg[0] == '\0' ||
 			    strlen(optarg) >= sizeof(req.font)) {
 				fprintf(stderr, "bosd: -f font must be "
@@ -206,6 +216,7 @@ main(int argc, char **argv)
 			strlcpy(req.font, optarg, sizeof(req.font));
 			break;
 		case 'G':
+			set.gauge_color = 1;
 			if (strlen(optarg) >= sizeof(req.color)) {
 				fprintf(stderr, "bosd: -G color must be "
 				    "at most %zu characters\n",
@@ -262,6 +273,7 @@ main(int argc, char **argv)
 				usage();
 			break;
 		case 'o':
+			set.outline = 1;
 			req.outline = 0;
 			break;
 		case 'p':
@@ -274,6 +286,7 @@ main(int argc, char **argv)
 			strlcpy(req.prefix, optarg, sizeof(req.prefix));
 			break;
 		case 'S':
+			set.screen = 1;
 			if (optarg[0] == '\0' ||
 			    strlen(optarg) >= sizeof(req.screen) ||
 			    optarg[strcspn(optarg, " \t\n")] != '\0') {
@@ -285,6 +298,7 @@ main(int argc, char **argv)
 			strlcpy(req.screen, optarg, sizeof(req.screen));
 			break;
 		case 's':
+			set.scale = 1;
 			req.scale = atof(optarg);
 			if (req.scale < BOSD_SCALE_MIN ||
 			    req.scale > BOSD_SCALE_MAX) {
@@ -309,9 +323,11 @@ main(int argc, char **argv)
 			printf("%s\n", BOSD_VERSION);
 			return (0);
 		case 'x':
+			set.x_off = 1;
 			req.x_off = atoi(optarg);
 			break;
 		case 'y':
+			set.y_off = 1;
 			req.y_off = atoi(optarg);
 			break;
 		default:
@@ -339,9 +355,16 @@ main(int argc, char **argv)
 		    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF ||
 		    !req.outline || req.x_off != 0 || req.y_off != 0)
 			usage();
+		if (bosd_conf_load(&cf) != 0)
+			return (1);
+		if (!set.screen)
+			bosd_conf_apply_screen(&cf, &req);
 		screen_set_default(req.screen);
 		return (run_daemon());
 	}
+
+	if (bosd_conf_load(&cf) != 0)
+		return (1);
 
 	/*
 	 * -C alone clears.  With a show (-g/-t/-c/-T/icon) it means
@@ -375,20 +398,35 @@ main(int argc, char **argv)
 		req.clear = 1;
 	}
 
-	if (req.gauge < 0 && (Bflag || Pflag || req.color[0] != '\0')) {
+	bosd_conf_apply_show(&cf, &req, &set);
+	/*
+	 * Without -S, a show sent to a daemon keeps that daemon's
+	 * screen. Local paint uses the file.
+	 */
+	if (!set.screen && (Dflag || !daemon_alive()))
+		bosd_conf_apply_screen(&cf, &req);
+	if (!req.outline &&
+	    req.outline_alpha != BOSD_OUTLINE_ALPHA_DEF) {
+		fprintf(stderr,
+		    "bosd: outline opacity requires the outline\n");
+		usage();
+	}
+
+	if (req.gauge < 0 && (Bflag || Pflag ||
+	    (set.gauge_color && req.color[0] != '\0'))) {
 		fprintf(stderr,
 		    "bosd: -B, -G, and -P describe the bar; they require -g\n");
 		usage();
 	}
-	if (req.tcolor[0] != '\0' && !tflag && !Tflag && count == 0 &&
-	    req.badge[0] == '\0' && req.gauge < 0) {
+	if (set.text_color && req.tcolor[0] != '\0' && !tflag && !Tflag &&
+	    count == 0 && req.badge[0] == '\0' && req.gauge < 0) {
 		fprintf(stderr,
 		    "bosd: -F colors -c/-t/-T text, a -b badge, or "
 		    "gauge -a/-p/overage labels\n");
 		usage();
 	}
-	if (req.font[0] != '\0' && !tflag && !Tflag && count == 0 &&
-	    req.badge[0] == '\0' && req.gauge < 0) {
+	if (set.font && req.font[0] != '\0' && !tflag && !Tflag &&
+	    count == 0 && req.badge[0] == '\0' && req.gauge < 0) {
 		fprintf(stderr,
 		    "bosd: -f sets the face for -c/-t/-T text, a "
 		    "-b badge, or gauge -a/-p labels\n");
@@ -440,7 +478,7 @@ main(int argc, char **argv)
 		} else {
 			if (argc > 1)
 				usage();
-			req.hold = 1.0;	/* one second per digit */
+			req.hold = 1.0;	/* per digit; not conf hold */
 			if (argc == 1)
 				holdarg = argv[0];
 		}

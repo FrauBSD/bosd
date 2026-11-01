@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-10-31 20:24:24 -0700 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-11-01 11:33:54 -0800 Devin Teske $
 #
 ############################################################ OPTIONS
 
@@ -36,9 +36,11 @@ INCLUDEDIR?=	${PREFIX}/include
 SHAREDIR?=	${PREFIX}/share
 DATADIR?=	${SHAREDIR}/bosd
 DOCSDIR?=	${SHAREDIR}/doc/bosd
-MANDIR?=	${SHAREDIR}/man/man1
+MAN1DIR?=	${SHAREDIR}/man/man1
 MAN3DIR?=	${SHAREDIR}/man/man3
+MAN5DIR?=	${SHAREDIR}/man/man5
 EXAMPLEDIR?=	${SHAREDIR}/examples/bosd
+ETCDIR?=	${PREFIX}/etc
 TESTDIR?=	${DATADIR}/tests
 PKGCONFIGDIR?=	${LIBDIR}/pkgconfig
 
@@ -53,7 +55,8 @@ PKG_LIBS!=	${PKG_CONFIG} --libs ${PKGS}
 
 CC?=		cc
 CFLAGS?=	-O2 -Wall -Wextra
-CPPFLAGS+=	-Iinclude -DBOSD_ICONDIR='"${DATADIR}"' ${PKG_CFLAGS}
+CPPFLAGS+=	-Iinclude -DBOSD_ICONDIR='"${DATADIR}"' \
+		-DBOSD_CONF='"${ETCDIR}/bosd.conf"' ${PKG_CFLAGS}
 
 .c.o:
 	${CC} ${CFLAGS} ${CPPFLAGS} -c $< -o $@
@@ -64,14 +67,16 @@ LDLIBS=		${PKG_LIBS}
 
 ############################################################ FILES
 
-PROGSRCS=	src/main.c src/daemon.c src/png.c src/x11.c src/screen.c \
-		src/osd_chrome.c src/draw_utf8.c src/badge.c \
-		src/bar_geom.c src/bar_paint.c src/bar.c \
-		src/countdown.c src/stext_paint.c src/stext.c
+PROGSRCS=	src/main.c src/conf.c src/daemon.c src/png.c src/x11.c \
+		src/screen.c src/osd_chrome.c src/draw_utf8.c src/badge.c \
+		src/bar_geom.c src/bar_paint.c src/bar.c src/countdown.c \
+		src/stext_paint.c src/stext.c
 PROGOBJS=	${PROGSRCS:.c=.o}
 MAN=		man/bosd.1
 MAN3=		man/bosd.3
+MAN5=		man/bosd.conf.5
 PICOMCONF=	examples/picom.conf
+BOSDCONF=	examples/bosd.conf
 EXAMPLE_PNGS=	examples/bsd.png \
 		examples/airplane-on.png examples/airplane-off.png \
 		examples/audio-speakers.png examples/audio-headphones.png \
@@ -93,7 +98,8 @@ EXAMPLE_PNGS=	examples/bsd.png \
 
 .PHONY: all
 
-all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN} ${PICOMCONF}
+all: ${SHLIB} libbosd.so ${PROG} bosd.pc ${MAN} ${MAN5} ${PICOMCONF} \
+		${BOSDCONF}
 
 ${SHLIB}: ${LIBOBJS}
 	${CC} -shared -Wl,-soname,${SHLIB} -o ${SHLIB} ${LIBOBJS}
@@ -107,7 +113,7 @@ ${PROG}: ${PROGOBJS} ${SHLIB} libbosd.so
 
 ${LIBOBJS}: CFLAGS+= -fPIC
 
-${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h
+${LIBOBJS} ${PROGOBJS}: include/bosd.h src/priv.h src/conf.h
 
 ${MAN}: ${MAN}.in Makefile
 	sed -e 's|@PREFIX@|${PREFIX}|g' \
@@ -115,8 +121,14 @@ ${MAN}: ${MAN}.in Makefile
 	    -e 's|@DOCSDIR@|${DOCSDIR}|g' \
 	    ${MAN}.in > ${MAN}
 
+${MAN5}: ${MAN5}.in Makefile
+	sed -e 's|@PREFIX@|${PREFIX}|g' ${MAN5}.in > ${MAN5}
+
 ${PICOMCONF}: ${PICOMCONF}.in Makefile
 	sed -e 's|@PREFIX@|${PREFIX}|g' ${PICOMCONF}.in > ${PICOMCONF}
+
+${BOSDCONF}: ${BOSDCONF}.in Makefile
+	sed -e 's|@PREFIX@|${PREFIX}|g' ${BOSDCONF}.in > ${BOSDCONF}
 
 bosd.pc: Makefile
 	@printf '%s\n' \
@@ -136,27 +148,29 @@ bosd.pc: Makefile
 
 install: all ${EXAMPLE_PNGS}
 	install -d ${DESTDIR}${BINDIR} ${DESTDIR}${LIBDIR} \
-		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MANDIR} \
-		${DESTDIR}${MAN3DIR} ${DESTDIR}${DATADIR} \
-		${DESTDIR}${EXAMPLEDIR} ${DESTDIR}${DOCSDIR} \
-		${DESTDIR}${PKGCONFIGDIR}
+		${DESTDIR}${INCLUDEDIR} ${DESTDIR}${MAN1DIR} \
+		${DESTDIR}${MAN3DIR} ${DESTDIR}${MAN5DIR} \
+		${DESTDIR}${DATADIR} ${DESTDIR}${EXAMPLEDIR} \
+		${DESTDIR}${DOCSDIR} ${DESTDIR}${PKGCONFIGDIR}
 	install -m 555 ${PROG} ${DESTDIR}${BINDIR}/${PROG}
 	install -m 555 bin/bosd-start ${DESTDIR}${BINDIR}/bosd-start
 	install -m 555 ${SHLIB} ${DESTDIR}${LIBDIR}/${SHLIB}
 	ln -sf ${SHLIB} ${DESTDIR}${LIBDIR}/libbosd.so
 	install -m 444 include/bosd.h ${DESTDIR}${INCLUDEDIR}/bosd.h
-	gzip -cn ${MAN} > ${DESTDIR}${MANDIR}/bosd.1.gz
-	gzip -cn man/bosd-start.1 > ${DESTDIR}${MANDIR}/bosd-start.1.gz
+	gzip -cn ${MAN} > ${DESTDIR}${MAN1DIR}/bosd.1.gz
+	gzip -cn man/bosd-start.1 > ${DESTDIR}${MAN1DIR}/bosd-start.1.gz
 	gzip -cn ${MAN3} > ${DESTDIR}${MAN3DIR}/bosd.3.gz
-	chmod 444 ${DESTDIR}${MANDIR}/bosd.1.gz \
-		${DESTDIR}${MANDIR}/bosd-start.1.gz \
-		${DESTDIR}${MAN3DIR}/bosd.3.gz
+	gzip -cn ${MAN5} > ${DESTDIR}${MAN5DIR}/bosd.conf.5.gz
+	chmod 444 ${DESTDIR}${MAN1DIR}/bosd.1.gz \
+		${DESTDIR}${MAN1DIR}/bosd-start.1.gz \
+		${DESTDIR}${MAN3DIR}/bosd.3.gz \
+		${DESTDIR}${MAN5DIR}/bosd.conf.5.gz
 	install -m 444 bosd.pc ${DESTDIR}${PKGCONFIGDIR}/bosd.pc
 	install -m 444 ${EXAMPLE_PNGS} ${DESTDIR}${DATADIR}/
 	install -m 444 examples/bsd.py examples/airplane.py \
 		examples/audio.py examples/auto-rotate.py examples/lid.py \
 		examples/mirror.py examples/tile.py tools/glyph.py \
-		${PICOMCONF} \
+		${PICOMCONF} ${BOSDCONF} \
 		${DESTDIR}${EXAMPLEDIR}/
 	install -m 444 README.md CHANGELOG.md ${DESTDIR}${DOCSDIR}/
 .if ${INSTALL_TESTS} == yes
@@ -208,7 +222,7 @@ examples/tile-on.png examples/tile-float.png \
 
 clean:
 	rm -f ${PROG} ${PROGOBJS} ${LIBOBJS} ${SHLIB} libbosd.so bosd.pc \
-		${MAN} ${PICOMCONF} ${EXAMPLE_PNGS}
+		${MAN} ${MAN5} ${PICOMCONF} ${BOSDCONF} ${EXAMPLE_PNGS}
 	rm -rf tools/__pycache__ examples/__pycache__
 
 .PHONY: test

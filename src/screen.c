@@ -6,7 +6,8 @@
  * one copy per connected output; identical rectangles are counted
  * once, so a mirror is not painted twice.  Any other selector is
  * that output's name (DP-4, eDP-1, ...).  The daemon may remember a
- * default from -S; a request that names a screen overrides it.
+ * default from -S or from bosd.conf; a request that names a screen
+ * overrides it.
  */
 #include <stdio.h>
 #include <string.h>

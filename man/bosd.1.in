@@ -3,7 +3,7 @@
 .\"
 .\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
 .\"
-.Dd October 30, 2026
+.Dd November 1, 2026
 .Dt BOSD 1
 .Os
 .Sh NAME
@@ -316,6 +316,11 @@ listening on a per-user datagram socket.
 .Fl S
 names the screen a later request uses when it omits
 .Fl S .
+With no
+.Fl S ,
+that screen comes from
+.Xr bosd.conf 5
+when the file sets one, otherwise the primary.
 .It Fl F Ar color
 Fill text and badges with
 .Ar color ,
@@ -710,6 +715,11 @@ exits when
 .Ar hold_seconds
 elapse
 .Pq default 2.0 for glyph or text, default 3.0 for bar; clamped to 0.01-30 .
+The glyph and text default is
+.Sy hold
+in
+.Xr bosd.conf 5
+when that name is set.
 A
 .Ar hold_seconds
 of \-1 holds the display until it is replaced or cleared with
@@ -732,8 +742,21 @@ then in the compiled share directory.
 A
 .Pa .png
 suffix is appended when missing.
+.Pp
+Optional flags take defaults from
+.Xr bosd.conf 5
+when that file exists.
+A flag on the command line overrides the file.
+A missing file leaves the built-in defaults.
 .Sh ENVIRONMENT
-.Bl -tag -width "BOSD_PATH"
+.Bl -tag -width "BOSD_CONF"
+.It Ev BOSD_CONF
+Path of the defaults file. Unset or empty is
+.Pa @PREFIX@/etc/bosd.conf .
+Each
+.Nm
+process uses the value it inherited.
+A missing file is valid.
 .It Ev BOSD_PATH
 Colon-separated icon search path, tried before the compiled default.
 .It Ev DISPLAY
@@ -754,6 +777,12 @@ glyph authoring example
 .Pq Pa bsd.py
 and the shared rasterizer
 .Pq Pa glyph.py
+.It Pa @PREFIX@/etc/bosd.conf
+optional defaults; see
+.Xr bosd.conf 5 .
+Missing is valid.
+.It Pa @PREFIX@/share/examples/bosd/bosd.conf
+sample of those defaults, set to the built-in values
 .It Pa @PREFIX@/share/examples/bosd/picom.conf
 .Xr picom 1
 configuration that leaves shadows on ordinary windows and turns
@@ -848,6 +877,7 @@ picom --config @PREFIX@/share/examples/bosd/picom.conf -b
 .Ed
 .Sh SEE ALSO
 .Xr bosd-start 1 ,
+.Xr bosd.conf 5 ,
 .Xr picom 1 ,
 .Xr xrandr 1 ,
 .Xr bosd 3

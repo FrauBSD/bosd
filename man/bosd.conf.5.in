@@ -1,0 +1,241 @@
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 Devin Teske <dteske@FreeBSD.org>
+.\"
+.Dd November 1, 2026
+.Dt BOSD.CONF 5
+.Os
+.Sh NAME
+.Nm bosd.conf
+.Nd default options for the bosd on-screen display
+.Sh DESCRIPTION
+.Pa @PREFIX@/etc/bosd.conf
+supplies defaults for optional
+.Xr bosd 1
+flags.
+.Ev BOSD_CONF ,
+when set and not empty, names the file instead.
+Each
+.Nm bosd
+process uses the value it inherited, so a daemon keeps the path it
+was started with.
+A missing file is valid: every default below is then the built-in
+value, and
+.Nm
+does not create the file.
+The sample, which lists those built-in values, is
+.Pa @PREFIX@/share/examples/bosd/bosd.conf .
+Copying that sample onto the path above does not change behavior.
+.Pp
+The format is one
+.Ar name Ns = Ns Ar value
+per line, which is what
+.Cm sysconf generic
+reads and writes:
+.Bd -literal -offset indent
+sysconf generic -f @PREFIX@/etc/bosd.conf screen=eDP-1
+.Ed
+.Pp
+A
+.Ql #
+starts a comment, through the end of the line, unless the
+.Ql #
+is inside quotes.
+Blank lines are ignored.
+A value is quoted only when it contains whitespace, a
+.Ql # ,
+a double quote, or a backslash.
+Inside quotes,
+.Ql \e
+escapes the next character.
+Names are case sensitive.
+A later assignment of the same name wins.
+An unknown name, or a value outside the range of the matching flag,
+is an error and
+.Nm bosd
+exits without drawing.
+A flag on the command line overrides the file.
+.Pp
+.Xr bosd 3
+does not read this file.
+A program that calls
+.Fn bosd_show
+sends the request it built.
+.Sh SCREEN
+.Sy screen
+corresponds to
+.Fl S .
+Empty, or leaving the name unset, means the primary output.
+.Pp
+.Nm bosd
+started with
+.Fl d
+and without
+.Fl S
+adopts
+.Sy screen
+as the screen a later request uses when that request also omits
+.Fl S .
+A show handed to a running daemon without
+.Fl S
+does not itself name a screen, so the daemon's default stays in
+force: that process's
+.Fl S ,
+or
+.Sy screen
+as of when the daemon started, or the primary.
+Restart the daemon after changing
+.Sy screen .
+.Pp
+A local show
+.Po
+.Fl D ,
+or no daemon on the channel
+.Pc
+without
+.Fl S
+uses
+.Sy screen
+from the file directly.
+.Sh SETTINGS
+Each name is the default for the flag in the description.
+The value shown is the built-in used when the file is missing or
+the name is omitted.
+.Bl -tag -width "outline_alpha"
+.It Sy screen
+.Fl S .
+Output name
+.Pq such as DP-4 or eDP-1 ,
+or
+.Cm all .
+Empty selects the primary.
+See
+.Sx SCREEN .
+.It Sy alpha
+.Fl A .
+.Fl 1
+leaves a PNG's own alpha alone
+.Pq and is full opacity for text and the gauge .
+Otherwise 0 to 1.
+.It Sy outline_alpha
+.Fl O .
+Opacity of the outline, 0 to 1.
+The built-in is 1.
+This is not
+.Sy alpha .
+.It Sy outline
+The inverse of
+.Fl o .
+.Cm yes
+draws the outline
+.Pq the built-in ;
+.Cm no
+is
+.Fl o .
+Also accepted:
+.Cm on ,
+.Cm off ,
+.Cm true ,
+.Cm false ,
+.Cm 1 ,
+and
+.Cm 0 .
+There is no flag that forces the outline back on, so
+.Cm no
+in the file is not overridden by omitting
+.Fl o .
+.It Sy font
+.Fl f .
+A fontconfig family.
+Empty is DejaVu Sans, then Sans.
+.It Sy text_color
+.Fl F .
+Name or
+.Li #rrggbb
+for
+.Fl c ,
+.Fl t ,
+.Fl T ,
+and
+.Fl b
+text, and for gauge labels.
+Empty is green for
+.Fl t
+and white otherwise.
+.It Sy gauge_color
+.Fl G .
+Fill of the
+.Fl g
+bar.
+Empty is
+.Li #2AC12A .
+Does not itself draw a bar.
+.It Sy scale
+.Fl s .
+Multiplier on the panel-derived size, 0.1 to 8.
+The built-in is 1.
+.It Sy x
+.Fl x .
+Pixels, positive right.
+The built-in is 0.
+.It Sy y
+.Fl y .
+Pixels, positive down.
+The built-in is 0.
+.It Sy hold
+.Ar hold_seconds
+for a glyph,
+.Fl t ,
+or
+.Fl T
+when that operand is omitted.
+.Fl 1
+holds until replaced or cleared; otherwise 0.01 to 30.
+The built-in is 2.
+An operand on the show replaces it.
+.Fl c
+keeps its own default of 1 second per digit unless that show
+passes
+.Ar hold_seconds .
+This is not
+.Sy gauge_hold .
+.It Sy gauge_hold
+.Fl B .
+Seconds the bar stays up.
+.Fl 1
+holds until replaced or cleared; otherwise 0.01 to 30.
+The built-in is 3.
+Does not itself draw a bar.
+.It Sy gauge_prev
+.Fl P .
+Prior-percent watermark.
+.Fl 1
+disables it
+.Pq the built-in ;
+otherwise 0 to 9999.
+Does not itself draw a bar.
+.El
+.Pp
+.Sy outline Ns = Ns Cm no
+together with an
+.Sy outline_alpha
+other than 1 is rejected, the same as
+.Fl o
+with
+.Fl O .
+.Sh FILES
+.Bl -tag -width "@PREFIX@/share/examples/bosd/bosd.conf" -compact
+.It Pa @PREFIX@/etc/bosd.conf
+defaults when
+.Ev BOSD_CONF
+is unset or empty; missing is valid
+.It Pa @PREFIX@/share/examples/bosd/bosd.conf
+sample, set to the built-in values
+.El
+.Sh SEE ALSO
+.Xr bosd 1 ,
+.Xr sysconf 8 ,
+.Xr sysconf-generic 8
+.Sh AUTHORS
+.An Devin Teske Aq Mt dteske@FreeBSD.org

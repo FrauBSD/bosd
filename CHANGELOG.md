@@ -1,10 +1,18 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-31 20:54:15 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 11:33:54 -0800 Devin Teske $)
 
 # Changelog
 
 Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
+
+## 10.9 (2026-11-01)
+
+- Read $PREFIX/etc/bosd.conf for defaults of optional flags (screen,
+  alpha, outline alpha, font, hold, and the other presentation
+  options). A missing file is valid. A flag or an explicit
+  hold\_seconds wins. BOSD\_CONF names the file; unset or empty is
+  $PREFIX/etc/bosd.conf.
 
 ## 10.8 (2026-10-31)
 

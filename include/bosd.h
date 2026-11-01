@@ -42,7 +42,7 @@ extern "C" {
  * fill the fields that apply.  String fields are NUL-terminated.
  * Literal whitespace is kept.  Escapes match bosd(1): \xNN, \uNNNN,
  * \UNNNNNNNN, \\.  screen is a RandR output name or "all"; empty
- * means the daemon's -S default, or the primary when that was not set.
+ * means the daemon's default (-S, else bosd.conf, else the primary).
  */
 struct bosd_req {
 	double	 hold;		/* seconds; -1 until clear/replace */

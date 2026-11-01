@@ -1,0 +1,56 @@
+# $FrauBSD: bosd/examples/bosd.conf.in 2026-11-01 11:33:54 -0800 Devin Teske $
+#
+# bosd display defaults.
+#
+# These values are what bosd uses when @PREFIX@/etc/bosd.conf does
+# not exist. BOSD_CONF, if set and not empty, names another file.
+# Copying this file to the default path does not change behavior.
+# A missing file is valid.
+#
+# sysconf generic -f @PREFIX@/etc/bosd.conf screen=eDP-1
+# sysconf generic -f @PREFIX@/etc/bosd.conf alpha=0.85
+#
+# Names are case sensitive. A flag on the command line wins.
+# bosd.conf(5) is the manual. bosd(3) does not read this file.
+
+# -S. Empty is the primary. A show sent to a daemon without -S
+# keeps that daemon's screen (its -S, else this value at startup).
+# A local show (-D, or no daemon) uses this value directly.
+screen=
+
+# -A. -1 leaves PNG alpha alone. 0 to 1 multiplies it.
+# Separate from outline_alpha.
+alpha=-1
+
+# -O. Outline opacity. Not alpha.
+outline_alpha=1
+
+# Inverse of -o. yes draws the outline. no is -o.
+outline=yes
+
+# -f. Empty is DejaVu Sans, then Sans.
+# A face with a space is quoted: font="DejaVu Sans"
+font=
+
+# -F. Empty is green for -t and white for -c, -T, and -b.
+text_color=
+
+# -G. Empty is #2AC12A. Does not itself draw a bar.
+gauge_color=
+
+# -s. 0.1 to 8.
+scale=1
+
+# -x, positive right. -y, positive down.
+x=0
+y=0
+
+# hold_seconds for a glyph or -t/-T. An explicit operand wins.
+# -c stays 1 second per digit unless that show passes one.
+hold=2
+
+# -B. Bar seconds. -1 holds until replaced. Does not draw a bar.
+gauge_hold=3
+
+# -P. -1 disables the watermark. Does not draw a bar.
+gauge_prev=-1

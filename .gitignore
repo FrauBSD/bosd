@@ -4,7 +4,9 @@ __pycache__/
 bosd
 bosd.pc
 examples/*.png
+examples/bosd.conf
 examples/picom.conf
 libbosd.so
 libbosd.so.*
 man/bosd.1
+man/bosd.conf.5
