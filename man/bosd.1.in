@@ -724,6 +724,8 @@ times each digit, so \-1 is rejected: the digits must advance.
 An
 .Ar icon
 containing a slash is used as a path.
+A relative path is made absolute in the client before the daemon
+sees it; the daemon's working directory is its own.
 A bare name is searched in each directory of the colon-separated
 .Ev BOSD_PATH ,
 then in the compiled share directory.

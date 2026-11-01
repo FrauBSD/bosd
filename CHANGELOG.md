@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-31 20:24:24 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-31 20:54:15 -0700 Devin Teske $)
 
 # Changelog
 
@@ -10,6 +10,7 @@ the repository for 1.0).
 
 - Add tile glyphs for Super-arrow chords (halves, quarters, fill,
   float-drop, insert, and rotate)
+- Make a relative icon path absolute before sending it to the daemon
 
 ## 10.7 (2026-10-30)
 

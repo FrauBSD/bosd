@@ -63,6 +63,25 @@ decode_field(char *s, size_t size)
 	strlcpy(s, tmp, size);
 }
 
+/*
+ * The daemon opens a slash path against its own cwd. Make a relative
+ * one absolute before the datagram. A bare name stays a name, so the
+ * daemon searches the BOSD_PATH it was started with.
+ */
+static int
+icon_for_daemon(const char *resolved, char *spec, size_t speclen)
+{
+	char abs[PATH_MAX];
+
+	if (strchr(spec, '/') == NULL || spec[0] == '/')
+		return (0);
+	if (realpath(resolved, abs) == NULL)
+		return (-1);
+	if (strlcpy(spec, abs, speclen) >= speclen)
+		return (-1);
+	return (0);
+}
+
 /* hold_seconds semantics: -1 indefinite, else clamped. */
 static double
 parse_hold(const char *s)
@@ -474,16 +493,26 @@ main(int argc, char **argv)
 
 	{
 		char path[BOSD_SPEC_MAX];
+		char name[BOSD_SPEC_MAX];
 
+		strlcpy(name, req.spec, sizeof(name));
 		if (icon_resolve(req.spec, path, sizeof(path)) != 0) {
 			fprintf(stderr, "bosd: cannot find icon '%s'\n",
-			    req.spec);
+			    name);
 			return (1);
 		}
+		if (!Dflag && daemon_alive()) {
+			if (icon_for_daemon(path, req.spec,
+			    sizeof(req.spec)) != 0) {
+				fprintf(stderr,
+				    "bosd: cannot resolve icon '%s'\n",
+				    name);
+				return (1);
+			}
+			if (send_show(&req) == 0)
+				return (0);
+		}
 	}
-
-	if (!Dflag && daemon_alive() && send_show(&req) == 0)
-		return (0);
 
 	clear_channel_if_asked(&req);
 	decode_field(req.badge, sizeof(req.badge));
