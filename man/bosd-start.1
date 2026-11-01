@@ -8,9 +8,12 @@
 .Os
 .Sh NAME
 .Nm bosd-start
-.Nd start the default bosd daemon
+.Nd start a bosd daemon
 .Sh SYNOPSIS
 .Nm
+.Op Fl n Ar instance
+.Nm
+.Fl h
 .Sh DESCRIPTION
 .Xr bosd 1
 paints a glyph, a gauge, or a caption with or without a daemon.
@@ -31,6 +34,8 @@ Key repeat updates the window already up.
 .Pp
 .Nm
 starts that daemon for the default instance.
+.Fl n Ar instance
+starts the named channel instead.
 .Nm bosd
 with
 .Fl d
@@ -50,7 +55,7 @@ from each place a session can start: a window manager
 .Ic StartFunction ,
 an XDG autostart entry, and the login greeter.
 Those paths are separate, and any of them may run first.
-When the default daemon is already running, and its executable is
+When that daemon is already running, and its executable is
 the one
 .Nm
 resolved on
@@ -79,14 +84,10 @@ The next
 .Nm
 is what puts the new binary on the socket.
 .Pp
-A named channel
-.Po
-.Nm bosd
-.Fl n Ar instance
-.Pc
-is started by whoever uses that channel.
+.Fl h ,
+and an option
 .Nm
-starts the default instance.
+does not recognize, prints a usage statement and exits.
 .Pp
 When
 .Ev BOSD_PATH
@@ -129,10 +130,14 @@ when
 is unset.
 .El
 .Sh FILES
-.Bl -tag -width "/tmp/bosd.default.uid.sock" -compact
-.It Pa /tmp/bosd.default. Ns Ar uid Ns Pa .sock
-request socket of the default instance
-.It Pa /tmp/bosd.default. Ns Ar uid Ns Pa .pid
+.Bl -tag -width "/tmp/bosd.instance.uid.sock" -compact
+.It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .sock
+request socket.
+The default
+.Ar instance
+is
+.Dq default
+.It Pa /tmp/bosd. Ns Ar instance . Ns Ar uid Ns Pa .pid
 daemon pid
 .El
 .Sh EXIT STATUS

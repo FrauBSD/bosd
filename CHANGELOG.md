@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 11:33:54 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 12:33:03 -0800 Devin Teske $)
 
 # Changelog
 
@@ -13,6 +13,9 @@ the repository for 1.0).
   options). A missing file is valid. A flag or an explicit
   hold\_seconds wins. BOSD\_CONF names the file; unset or empty is
   $PREFIX/etc/bosd.conf.
+- bosd-start -n starts that instance when it is not already
+  running, and returns when it is. -h or an unknown option prints
+  usage.
 
 ## 10.8 (2026-10-31)
 

@@ -9,22 +9,77 @@
 #
 # $Title: Start bosd for an X session $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/bin/bosd-start 2026-10-22 09:57:44 -0700 Devin Teske $
+# $FrauBSD: bosd/bin/bosd-start 2026-11-01 12:33:03 -0800 Devin Teske $
 #
 ############################################################ INFORMATION
 #
 # One bosd for this uid on this DISPLAY.
 #
-# Default instance only. A live pid whose binary is the bosd this
-# script would start is left alone. bosd -d stays in the foreground,
-# so this backgrounds it.
+# Default instance, or the instance named with -n. A live pid whose
+# binary is the bosd this script would start is left alone. bosd -d
+# stays in the foreground, so this backgrounds it.
 #
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Command-line options
+#
+INSTANCE=		# -n instance
+INSTANCE_NAME=default	# -n instance
+
+############################################################ FUNCTIONS
+
+usage()
+{
+	local fmt="$1"
+	local optfmt="\t%-12s %s\n"
+
+	exec >&2
+	if [ "$fmt" ]; then
+		shift 1 # fmt
+		printf "%s: $fmt\n" "$pgm" "$@"
+	fi
+
+	printf "Usage: %s [-h] [-n instance]\n" "$pgm"
+	printf "Options:\n"
+	printf "$optfmt" "-h" "Print usage statement and exit."
+	printf "$optfmt" "-n instance" \
+		"Start this instance if it is not running."
+
+	exit $FAILURE
+}
+
 ############################################################ MAIN
 
-pgm=bosd-start
+while getopts hn: flag; do
+	case "$flag" in
+	n)
+		INSTANCE=1
+		INSTANCE_NAME="$OPTARG"
+		case "$INSTANCE_NAME" in
+		""|*/*)
+			usage "invalid instance" # NOTREACHED
+			;;
+		esac
+		[ "${#INSTANCE_NAME}" -lt 64 ] ||
+			usage "invalid instance" # NOTREACHED
+		;;
+	*) usage # NOTREACHED
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
 uid=$( id -u )
-sock=/tmp/bosd.default.$uid.sock
-pidf=/tmp/bosd.default.$uid.pid
+sock="/tmp/bosd.$INSTANCE_NAME.$uid.sock"
+pidf="/tmp/bosd.$INSTANCE_NAME.$uid.pid"
 
 export DISPLAY="${DISPLAY:-:0}"
 if [ ! "$BOSD_PATH" ] && [ -d "${HOME:-}/theme/osd" ]; then
@@ -34,7 +89,7 @@ fi
 bosd_bin=$( command -v bosd 2> /dev/null ) || bosd_bin=
 if [ ! -x "$bosd_bin" ]; then
 	echo "$pgm: bosd not found" >&2
-	exit 1
+	exit $FAILURE
 fi
 
 if [ -S "$sock" ] && [ -f "$pidf" ]; then
@@ -43,7 +98,7 @@ if [ -S "$sock" ] && [ -f "$pidf" ]; then
 		_exe=$( procstat -b "$_pid" 2> /dev/null |
 			awk 'NR > 1 { print $NF; exit }' )
 		if [ "$_exe" = "$bosd_bin" ] || [ ! "$_exe" ]; then
-			exit 0
+			exit $SUCCESS
 		fi
 		kill "$_pid" 2> /dev/null || : stale bosd
 		_i=0
@@ -55,12 +110,20 @@ if [ -S "$sock" ] && [ -f "$pidf" ]; then
 	fi
 fi
 
-"$bosd_bin" -d > /dev/null 2>&1 &
+if [ "$INSTANCE" ]; then
+	"$bosd_bin" -n "$INSTANCE_NAME" -d > /dev/null 2>&1 &
+else
+	"$bosd_bin" -d > /dev/null 2>&1 &
+fi
 _i=0
 while [ "$_i" -lt 40 ]; do
-	[ -S "$sock" ] && exit 0
+	[ -S "$sock" ] && exit $SUCCESS
 	sleep 0.05
 	_i=$(( $_i + 1 ))
 done
 echo "$pgm: bosd did not become ready" >&2
-exit 1
+exit $FAILURE
+
+################################################################################
+# END
+################################################################################
