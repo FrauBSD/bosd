@@ -9,14 +9,26 @@
 #
 # $Title: Make window tile-mode PNG glyphs $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/examples/tile.py 2026-10-22 09:57:14 -0700 Devin Teske $
+# $FrauBSD: bosd/examples/tile.py 2026-10-31 20:24:24 -0700 Devin Teske $
 #
 ############################################################ DOCSTRING
 
-"""Super+T tiling OSD glyphs: filled white solids.
+"""Super+T and Super-arrow tiling OSD glyphs: filled white solids.
 
-  tile-on.png     2x2 panes (tiling mode)
-  tile-float.png  overlapping window frames (floating mode)
+  tile-on.png             2x2 panes (tiling mode)
+  tile-float.png          overlapping window frames (floating mode)
+  tile-left.png           left half
+  tile-right.png          right half
+  tile-up.png             working area (Super+Up)
+  tile-down.png           window dropped out of the grid
+  tile-top.png            top half
+  tile-bottom.png         bottom half
+  tile-top-left.png       top-left quarter
+  tile-top-right.png      top-right quarter
+  tile-bottom-left.png    bottom-left quarter
+  tile-bottom-right.png   bottom-right quarter
+  tile-insert.png         grid, window joined at the top
+  tile-rotate.png         grid, window stepped back
 """
 
 ############################################################ INCLUDES
@@ -71,11 +83,136 @@ def draw_float(c):
 		c.fill_round_rect(x0 + 18, y0 + 18, x1 - 18, y0 + 58, 8)
 
 
+def stroke_desk(c):
+	ox0, oy0, ox1, oy1 = 64.0, 88.0, 448.0, 424.0
+	c.roundrect(ox0, oy0, ox1 - ox0, oy1 - oy0, 22, 14)
+
+
+def cell_box(col, row, cols, rows):
+	#
+	# Same inset and gap as the Super+T grid, so a quarter sits on a
+	# tile-on pane and a half spans a pair of them.
+	#
+	ox0, oy0, ox1, oy1 = 64.0, 88.0, 448.0, 424.0
+	inner = 28.0
+	gap = 18.0
+	x0, y0 = ox0 + inner, oy0 + inner
+	x1, y1 = ox1 - inner, oy1 - inner
+	cw = (x1 - x0 - gap * (cols - 1)) / cols
+	ch = (y1 - y0 - gap * (rows - 1)) / rows
+	a = x0 + col * (cw + gap)
+	b = y0 + row * (ch + gap)
+	return a, b, a + cw, b + ch
+
+
+def fill_cell(c, col, row, cols, rows):
+	a, b, d, e = cell_box(col, row, cols, rows)
+	c.fill_round_rect(a, b, d, e, 14)
+
+
+def stroke_grid(c, cols, rows):
+	for col in range(cols):
+		for row in range(rows):
+			a, b, d, e = cell_box(col, row, cols, rows)
+			c.roundrect(a, b, d - a, e - b, 14, 14)
+
+
+def draw_span(c, col, row, cols, rows):
+	stroke_desk(c)
+	fill_cell(c, col, row, cols, rows)
+
+
+def draw_left(c):
+	draw_span(c, 0, 0, 2, 1)
+
+
+def draw_right(c):
+	draw_span(c, 1, 0, 2, 1)
+
+
+def draw_up(c):
+	#
+	# Super+Up fills the working area. The top half is tile-top.
+	#
+	draw_span(c, 0, 0, 1, 1)
+
+
+def draw_down(c):
+	#
+	# Super+Down leaves the grid. The frame hangs out the bottom of
+	# the desk; tile-float stays the Super+T off glyph.
+	#
+	stroke_desk(c)
+	x0, y0, x1, y1 = 150.0, 280.0, 390.0, 488.0
+	c.roundrect(x0, y0, x1 - x0, y1 - y0, 20, 13)
+	c.fill_round_rect(x0 + 18, y0 + 18, x1 - 18, y0 + 58, 8)
+
+
+def draw_top(c):
+	draw_span(c, 0, 0, 1, 2)
+
+
+def draw_bottom(c):
+	draw_span(c, 0, 1, 1, 2)
+
+
+def draw_top_left(c):
+	draw_span(c, 0, 0, 2, 2)
+
+
+def draw_top_right(c):
+	draw_span(c, 1, 0, 2, 2)
+
+
+def draw_bottom_left(c):
+	draw_span(c, 0, 1, 2, 2)
+
+
+def draw_bottom_right(c):
+	draw_span(c, 1, 1, 2, 2)
+
+
+def draw_insert(c):
+	#
+	# Ctrl+Up joins the layout. The other three cells stay outlines
+	# so this is not the top-left quarter.
+	#
+	stroke_desk(c)
+	stroke_grid(c, 2, 2)
+	fill_cell(c, 0, 0, 2, 2)
+
+
+def draw_rotate(c):
+	#
+	# Ctrl+Down steps backward. The lit cell is the lower one, with
+	# the rest of the grid outlined (not the bottom half).
+	#
+	stroke_desk(c)
+	stroke_grid(c, 2, 2)
+	fill_cell(c, 0, 1, 2, 2)
+
+
 ############################################################ MAIN
 
 def main(argv):
 	outdir = Path(argv[1] if len(argv) > 1 else ".")
-	for name, drawer in (("on", draw_tile), ("float", draw_float)):
+	glyphs = (
+		("on", draw_tile),
+		("float", draw_float),
+		("left", draw_left),
+		("right", draw_right),
+		("up", draw_up),
+		("down", draw_down),
+		("top", draw_top),
+		("bottom", draw_bottom),
+		("top-left", draw_top_left),
+		("top-right", draw_top_right),
+		("bottom-left", draw_bottom_left),
+		("bottom-right", draw_bottom_right),
+		("insert", draw_insert),
+		("rotate", draw_rotate),
+	)
+	for name, drawer in glyphs:
 		c = Canvas(512, 512)
 		drawer(c)
 		for path in emit(c, f"tile-{name}.png", [outdir]):

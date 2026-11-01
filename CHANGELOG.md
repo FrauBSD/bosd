@@ -1,10 +1,15 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-30 12:49:32 -0700 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-10-31 20:24:24 -0700 Devin Teske $)
 
 # Changelog
 
 Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
+
+## 10.8 (2026-10-31)
+
+- Add tile glyphs for Super-arrow chords (halves, quarters, fill,
+  float-drop, insert, and rotate)
 
 ## 10.7 (2026-10-30)
 

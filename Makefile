@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-10-30 11:12:58 -0700 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-10-31 20:24:24 -0700 Devin Teske $
 #
 ############################################################ OPTIONS
 
@@ -80,7 +80,14 @@ EXAMPLE_PNGS=	examples/bsd.png \
 		examples/mirror-on.png examples/mirror-off.png \
 		examples/mirror-none.png examples/mirror-extend.png \
 		examples/mirror-extend-none.png \
-		examples/tile-on.png examples/tile-float.png
+		examples/tile-on.png examples/tile-float.png \
+		examples/tile-left.png examples/tile-right.png \
+		examples/tile-up.png examples/tile-down.png \
+		examples/tile-top.png examples/tile-bottom.png \
+		examples/tile-top-left.png examples/tile-top-right.png \
+		examples/tile-bottom-left.png \
+		examples/tile-bottom-right.png \
+		examples/tile-insert.png examples/tile-rotate.png
 
 ############################################################ TARGETS
 
@@ -186,7 +193,14 @@ examples/mirror-on.png examples/mirror-off.png examples/mirror-none.png \
 		examples/mirror.py tools/glyph.py
 	${PYTHON} examples/mirror.py examples
 
-examples/tile-on.png examples/tile-float.png: \
+examples/tile-on.png examples/tile-float.png \
+		examples/tile-left.png examples/tile-right.png \
+		examples/tile-up.png examples/tile-down.png \
+		examples/tile-top.png examples/tile-bottom.png \
+		examples/tile-top-left.png examples/tile-top-right.png \
+		examples/tile-bottom-left.png \
+		examples/tile-bottom-right.png \
+		examples/tile-insert.png examples/tile-rotate.png: \
 		examples/tile.py tools/glyph.py
 	${PYTHON} examples/tile.py examples
 
