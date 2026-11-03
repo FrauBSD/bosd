@@ -39,6 +39,23 @@ else
 	fi
 fi
 
+test_begin "screen word builtin"
+panel=$( xrandr --query 2> /dev/null |
+	awk '/^(eDP|LVDS|DSI)[^ ]* connected/{ print $1; exit }' )
+if [ "$panel" ]; then
+	expect "Glyph on $panel; builtin does not mean an output of that name"
+	if ! "$BOSD" -D -S builtin "$png" 0.2 > /dev/null 2>&1; then
+		printf '%s\n' "bosd-test: -S builtin failed" >&2
+		exit 1
+	fi
+else
+	expect "No glyph; no built-in output is connected"
+	if "$BOSD" -D -S builtin "$png" 0.2 > /dev/null 2>&1; then
+		printf '%s\n' "bosd-test: -S builtin was accepted" >&2
+		exit 1
+	fi
+fi
+
 test_begin "screen word mouse"
 expect "Glyph on the output under the pointer"
 if ! "$BOSD" -D -S mouse "$png" 0.2 > /dev/null 2>&1; then

@@ -4,6 +4,8 @@
  * An empty selector is the primary output, else the first connected
  * internal panel (eDP/LVDS/DSI), else the whole X screen.  "primary"
  * is that primary output and does not fall back to the panel.
+ * "builtin" is the first connected internal panel and does not
+ * fall back to the whole X screen.
  * "mouse" is the output under the pointer.
  * "focus" is the output that holds the focused window.  When the
  * pointer has the focus, that is the output under the pointer.
@@ -48,6 +50,7 @@ enum {
 	SEL_EMPTY = 0,
 	SEL_ALL,
 	SEL_PRIMARY,
+	SEL_BUILTIN,
 	SEL_MOUSE,
 	SEL_FOCUS,
 	SEL_NAME
@@ -270,6 +273,8 @@ sel_kind(const char *sel)
 		return (SEL_ALL);
 	if (strcmp(sel, "primary") == 0)
 		return (SEL_PRIMARY);
+	if (strcmp(sel, "builtin") == 0)
+		return (SEL_BUILTIN);
 	if (strcmp(sel, "mouse") == 0)
 		return (SEL_MOUSE);
 	if (strcmp(sel, "focus") == 0)
@@ -356,8 +361,9 @@ screen_use(int i)
  * Fill the target list.  Returns 0, or -1 when the selector does
  * not name a connected output.  sel NULL or "" is the primary,
  * else the built-in panel, else the whole X screen.  "primary"
- * is the primary output only.  "mouse" is the output under the
- * pointer.  "focus" is the output that holds the focused window.
+ * is the primary output only.  "builtin" is the first connected
+ * internal panel only.  "mouse" is the output under the pointer.
+ * "focus" is the output that holds the focused window.
  */
 int
 screen_prepare(const char *sel)
@@ -441,6 +447,22 @@ screen_prepare(const char *sel)
 				targets_reset();
 				return (-1);
 			}
+		} else if (kind == SEL_BUILTIN) {
+			pick = -1;
+			for (i = 0; i < nf; i++) {
+				if (found[i].internal) {
+					pick = i;
+					break;
+				}
+			}
+			if (pick < 0) {
+				XRRFreeScreenResources(res);
+				warn_sel("builtin", "no built-in output");
+				targets_reset();
+				return (-1);
+			}
+			target_box(found[pick].name, found[pick].x,
+			    found[pick].y, found[pick].w, found[pick].h);
 		} else if (kind == SEL_ALL) {
 			for (i = 0; i < nf; i++) {
 				if (rect_taken(found[i].x, found[i].y,
@@ -520,6 +542,9 @@ screen_prepare(const char *sel)
 	} else if (kind == SEL_PRIMARY) {
 		warn_sel("primary", "no primary output");
 		return (-1);
+	} else if (kind == SEL_BUILTIN) {
+		warn_sel("builtin", "no built-in output");
+		return (-1);
 	} else if (kind == SEL_MOUSE) {
 		warn_sel("mouse", "pointer is not on a connected output");
 		return (-1);
@@ -535,6 +560,10 @@ screen_prepare(const char *sel)
 		}
 		if (kind == SEL_PRIMARY) {
 			warn_sel("primary", "no primary output");
+			return (-1);
+		}
+		if (kind == SEL_BUILTIN) {
+			warn_sel("builtin", "no built-in output");
 			return (-1);
 		}
 		if (kind == SEL_MOUSE) {

@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:54:46 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 11:18:37 -0800 Devin Teske $)
 
 # Changelog
 
@@ -16,6 +16,8 @@ the repository for 1.0).
   the pointer.
 - Tile glyphs for a move to the next screen and the previous
   screen (`tile-next`, `tile-prev`).
+- `-S builtin` is the first connected built-in panel (eDP,
+  LVDS, or DSI). It does not fall back to the whole X screen.
 
 ## 10.9 (2026-11-01)
 

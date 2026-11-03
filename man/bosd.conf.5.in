@@ -70,6 +70,10 @@ Empty, or leaving the name unset, means the primary output,
 or the built-in panel when no primary is set.
 .Cm primary
 does not use that fallback.
+.Cm builtin
+is the first connected built-in panel
+.Pq eDP/LVDS/DSI .
+It does not use the whole X screen when none is connected.
 .Cm mouse
 is the output under the pointer.
 .Cm focus
@@ -124,6 +128,8 @@ or
 or
 .Cm primary ,
 or
+.Cm builtin ,
+or
 .Cm mouse ,
 or
 .Cm focus .
@@ -131,6 +137,10 @@ Empty selects the primary, or the built-in panel when no
 primary is set.
 .Cm primary
 does not use that fallback.
+.Cm builtin
+is the first connected built-in panel
+.Pq eDP/LVDS/DSI .
+It does not use the whole X screen when none is connected.
 .Cm mouse
 is the output under the pointer.
 .Cm focus

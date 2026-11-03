@@ -575,6 +575,10 @@ instead of the primary
 .Cm primary
 is that primary output and does not use the built-in panel
 when no primary is set.
+.Cm builtin
+is the first connected built-in panel
+.Pq eDP/LVDS/DSI
+and does not use the whole X screen when none is connected.
 .Cm mouse
 is the output under the pointer.
 .Cm focus
