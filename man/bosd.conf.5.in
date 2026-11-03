@@ -66,7 +66,10 @@ sends the request it built.
 .Sy screen
 corresponds to
 .Fl S .
-Empty, or leaving the name unset, means the primary output.
+Empty, or leaving the name unset, means the primary output,
+or the built-in panel when no primary is set.
+.Cm primary
+does not use that fallback.
 .Pp
 .Nm bosd
 started with
@@ -111,8 +114,13 @@ the name is omitted.
 Output name
 .Pq such as DP-4 or eDP-1 ,
 or
-.Cm all .
-Empty selects the primary.
+.Cm all ,
+or
+.Cm primary .
+Empty selects the primary, or the built-in panel when no
+primary is set.
+.Cm primary
+does not use that fallback.
 See
 .Sx SCREEN .
 .It Sy alpha

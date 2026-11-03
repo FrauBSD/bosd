@@ -1,4 +1,4 @@
-# $FrauBSD: bosd/examples/bosd.conf.in 2026-11-01 11:33:54 -0800 Devin Teske $
+# $FrauBSD: bosd/examples/bosd.conf.in 2026-11-03 10:52:02 -0800 Devin Teske $
 #
 # bosd display defaults.
 #
@@ -13,7 +13,9 @@
 # Names are case sensitive. A flag on the command line wins.
 # bosd.conf(5) is the manual. bosd(3) does not read this file.
 
-# -S. Empty is the primary. A show sent to a daemon without -S
+# -S. Empty is the primary, or the built-in panel when no
+# primary is set. The word primary does not use that fallback.
+# A show sent to a daemon without -S
 # keeps that daemon's screen (its -S, else this value at startup).
 # A local show (-D, or no daemon) uses this value directly.
 screen=

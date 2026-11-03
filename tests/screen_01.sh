@@ -23,6 +23,22 @@ if [ "$out" ]; then
 	show -S "$out" "$png" "$( hold_arg )"
 fi
 
+test_begin "screen word primary"
+prim=$( xrandr --query 2> /dev/null | awk '/ connected primary/{ print $1; exit }' )
+if [ "$prim" ]; then
+	expect "Glyph on $prim; primary does not mean an output of that name"
+	if ! "$BOSD" -D -S primary "$png" 0.2 > /dev/null 2>&1; then
+		printf '%s\n' "bosd-test: -S primary failed" >&2
+		exit 1
+	fi
+else
+	expect "No glyph; no primary output is set"
+	if "$BOSD" -D -S primary "$png" 0.2 > /dev/null 2>&1; then
+		printf '%s\n' "bosd-test: -S primary was accepted" >&2
+		exit 1
+	fi
+fi
+
 test_begin "screen unknown output"
 expect "No glyph; bosd reports that the output is not connected"
 

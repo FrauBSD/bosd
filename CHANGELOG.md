@@ -1,10 +1,15 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-01 12:37:15 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:52:02 -0800 Devin Teske $)
 
 # Changelog
 
 Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
+
+## 11.0 (2026-11-03)
+
+- `-S primary` is the primary output. It does not fall back to
+  the built-in panel. An empty screen still does.
 
 ## 10.9 (2026-11-01)
 

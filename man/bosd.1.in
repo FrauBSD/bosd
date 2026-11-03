@@ -572,6 +572,9 @@ Draw on the RandR output named
 .Ar screen
 instead of the primary
 .Pq or the built-in panel when no primary is set .
+.Cm primary
+is that primary output and does not use the built-in panel
+when no primary is set.
 .Ql Li all
 draws one copy on every connected output, each sized and centered
 on that output.

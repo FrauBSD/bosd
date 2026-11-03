@@ -41,8 +41,9 @@ extern "C" {
  * One display request.  Zero the struct (or call bosd_req_init) then
  * fill the fields that apply.  String fields are NUL-terminated.
  * Literal whitespace is kept.  Escapes match bosd(1): \xNN, \uNNNN,
- * \UNNNNNNNN, \\.  screen is a RandR output name or "all"; empty
- * means the daemon's default (-S, else bosd.conf, else the primary).
+ * \UNNNNNNNN, \\.  screen is a RandR output name, "all", or
+ * "primary"; empty means the daemon's default (-S, else
+ * bosd.conf, else the primary, else the built-in panel).
  */
 struct bosd_req {
 	double	 hold;		/* seconds; -1 until clear/replace */
@@ -66,7 +67,7 @@ struct bosd_req {
 	double	 alpha;		/* <0 native PNG; else multiply PNG alpha */
 	double	 outline_alpha;	/* multiplies outline alpha; 1 = opaque */
 	char	 font[BOSD_FONT_MAX];	/* -f fontconfig family; empty = default */
-	char	 screen[BOSD_SCREEN_MAX]; /* -S output, "all", or empty */
+	char	 screen[BOSD_SCREEN_MAX]; /* -S output, all, primary, or empty */
 };
 
 /* Fill defaults: hold 2s, scale 1, native PNG alpha, outline on and

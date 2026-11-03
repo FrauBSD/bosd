@@ -2,12 +2,13 @@
  * Which RandR output a show lands on.
  *
  * An empty selector is the primary output, else the first connected
- * internal panel (eDP/LVDS/DSI), else the whole X screen.  "all" is
- * one copy per connected output; identical rectangles are counted
- * once, so a mirror is not painted twice.  Any other selector is
- * that output's name (DP-4, eDP-1, ...).  The daemon may remember a
- * default from -S or from bosd.conf; a request that names a screen
- * overrides it.
+ * internal panel (eDP/LVDS/DSI), else the whole X screen.  "primary"
+ * is that primary output and does not fall back to the panel.
+ * "all" is one copy per connected output; identical rectangles are
+ * counted once, so a mirror is not painted twice.  Any other
+ * selector is that output's name (DP-4, eDP-1, ...).  The daemon
+ * may remember a default from -S or from bosd.conf; a request that
+ * names a screen overrides it.
  */
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +33,20 @@ static unsigned char targeted[BOSD_SCREEN_SLOTS];
 static char	 daemon_screen[BOSD_SCREEN_MAX];
 static int	 daemon_screen_fixed;	/* -S on the daemon command */
 static char	 warned[BOSD_SCREEN_MAX];
+
+struct output_found {
+	char		 name[BOSD_SCREEN_MAX];
+	int		 x, y, w, h;
+	int		 internal;
+	RROutput	 id;
+};
+
+enum {
+	SEL_EMPTY = 0,
+	SEL_ALL,
+	SEL_PRIMARY,
+	SEL_NAME
+};
 
 static void
 apply_icon_px(void)
@@ -135,6 +150,43 @@ warn_once(const char *sel)
 	strlcpy(warned, sel, sizeof(warned));
 }
 
+static void
+warn_sel(const char *sel, const char *msg)
+{
+	if (strcmp(warned, sel) == 0)
+		return;
+	fprintf(stderr, "bosd: %s\n", msg);
+	strlcpy(warned, sel, sizeof(warned));
+}
+
+static void
+target_box(const char *name, int x, int y, int w, int h)
+{
+	int slot;
+
+	slot = slot_for_name(name);
+	if (slot < 0)
+		return;
+	geom[slot].x = x;
+	geom[slot].y = y;
+	geom[slot].w = w;
+	geom[slot].h = h;
+	target_add(slot);
+}
+
+/* 0 empty, 1 all, 2 the word primary, 3 an output name. */
+static int
+sel_kind(const char *sel)
+{
+	if (sel == NULL || sel[0] == '\0')
+		return (SEL_EMPTY);
+	if (strcmp(sel, "all") == 0)
+		return (SEL_ALL);
+	if (strcmp(sel, "primary") == 0)
+		return (SEL_PRIMARY);
+	return (SEL_NAME);
+}
+
 void
 screen_set_default(const char *name)
 {
@@ -211,36 +263,33 @@ screen_use(int i)
 }
 
 /*
- * Fill the target list.  Returns 0, or -1 when a named output is
- * not connected.  sel NULL or "" is the primary/internal default.
+ * Fill the target list.  Returns 0, or -1 when the selector does
+ * not name a connected output.  sel NULL or "" is the primary,
+ * else the built-in panel, else the whole X screen.  "primary"
+ * is the primary output only.
  */
 int
 screen_prepare(const char *sel)
 {
-	struct found {
-		char		 name[BOSD_SCREEN_MAX];
-		int		 x, y, w, h;
-		int		 internal;
-		RROutput	 id;
-	} found[BOSD_OUTPUT_MAX];
+	struct output_found found[BOSD_OUTPUT_MAX];
 	Window root;
 	XRRScreenResources *res;
 	XRROutputInfo *oi;
 	XRRCrtcInfo *ci;
 	RROutput primary;
-	int screen, i, nf, pick, named;
+	int screen, i, nf, pick, kind;
 
 	targets_reset();
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
 	nf = 0;
-	named = (sel != NULL && sel[0] != '\0' && strcmp(sel, "all") != 0);
+	kind = sel_kind(sel);
 
 	res = XRRGetScreenResourcesCurrent(dpy, root);
 	if (res != NULL) {
 		for (i = 0; i < res->noutput && nf < BOSD_OUTPUT_MAX; i++) {
 			size_t nlen;
-			struct found *f;
+			struct output_found *f;
 
 			oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
 			if (oi == NULL)
@@ -272,7 +321,7 @@ screen_prepare(const char *sel)
 			XRRFreeOutputInfo(oi);
 		}
 
-		if (!named && (sel == NULL || sel[0] == '\0')) {
+		if (kind == SEL_EMPTY || kind == SEL_PRIMARY) {
 			pick = -1;
 			primary = XRRGetOutputPrimary(dpy, root);
 			if (primary != None) {
@@ -283,7 +332,7 @@ screen_prepare(const char *sel)
 					}
 				}
 			}
-			if (pick < 0) {
+			if (pick < 0 && kind == SEL_EMPTY) {
 				for (i = 0; i < nf; i++) {
 					if (found[i].internal) {
 						pick = i;
@@ -292,32 +341,22 @@ screen_prepare(const char *sel)
 				}
 			}
 			if (pick >= 0) {
-				int slot = slot_for_name(found[pick].name);
-
-				if (slot >= 0) {
-					geom[slot].x = found[pick].x;
-					geom[slot].y = found[pick].y;
-					geom[slot].w = found[pick].w;
-					geom[slot].h = found[pick].h;
-					target_add(slot);
-				}
+				target_box(found[pick].name, found[pick].x,
+				    found[pick].y, found[pick].w,
+				    found[pick].h);
+			} else if (kind == SEL_PRIMARY) {
+				XRRFreeScreenResources(res);
+				warn_sel("primary", "no primary output");
+				targets_reset();
+				return (-1);
 			}
-		} else if (!named) {
-			/* "all" */
+		} else if (kind == SEL_ALL) {
 			for (i = 0; i < nf; i++) {
-				int slot;
-
 				if (rect_taken(found[i].x, found[i].y,
 				    found[i].w, found[i].h))
 					continue;
-				slot = slot_for_name(found[i].name);
-				if (slot < 0)
-					continue;
-				geom[slot].x = found[i].x;
-				geom[slot].y = found[i].y;
-				geom[slot].w = found[i].w;
-				geom[slot].h = found[i].h;
-				target_add(slot);
+				target_box(found[i].name, found[i].x,
+				    found[i].y, found[i].w, found[i].h);
 			}
 		} else {
 			pick = -1;
@@ -333,27 +372,25 @@ screen_prepare(const char *sel)
 				targets_reset();
 				return (-1);
 			}
-			{
-				int slot = slot_for_name(found[pick].name);
-
-				if (slot >= 0) {
-					geom[slot].x = found[pick].x;
-					geom[slot].y = found[pick].y;
-					geom[slot].w = found[pick].w;
-					geom[slot].h = found[pick].h;
-					target_add(slot);
-				}
-			}
+			target_box(found[pick].name, found[pick].x,
+			    found[pick].y, found[pick].w, found[pick].h);
 		}
 		XRRFreeScreenResources(res);
-	} else if (named) {
+	} else if (kind == SEL_NAME) {
 		warn_once(sel);
+		return (-1);
+	} else if (kind == SEL_PRIMARY) {
+		warn_sel("primary", "no primary output");
 		return (-1);
 	}
 
 	if (ntargets == 0) {
-		if (named) {
+		if (kind == SEL_NAME) {
 			warn_once(sel);
+			return (-1);
+		}
+		if (kind == SEL_PRIMARY) {
+			warn_sel("primary", "no primary output");
 			return (-1);
 		}
 		target_whole();
