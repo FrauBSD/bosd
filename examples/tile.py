@@ -9,7 +9,7 @@
 #
 # $Title: Make window tile-mode PNG glyphs $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/examples/tile.py 2026-11-03 10:54:46 -0800 Devin Teske $
+# $FrauBSD: bosd/examples/tile.py 2026-11-03 15:47:21 -0800 Devin Teske $
 #
 ############################################################ DOCSTRING
 
@@ -31,6 +31,8 @@
   tile-rotate.png         grid, window stepped back
   tile-next.png           window moved to the next screen
   tile-prev.png           window moved to the previous screen
+  tile-desk-next.png      window moved to the next desktop
+  tile-desk-prev.png      window moved to the previous desktop
 """
 
 ############################################################ INCLUDES
@@ -241,6 +243,45 @@ def draw_prev(c):
 	draw_moved_window(c, *frames[0])
 
 
+def draw_desks(c):
+	#
+	# Two desktops, top then bottom. Wider than the monitor frames
+	# so this is not tile-next. The gap is where the chevron sits.
+	#
+	frames = (
+		(64.0, 28.0, 448.0, 210.0),
+		(64.0, 302.0, 448.0, 484.0),
+	)
+	for x0, y0, x1, y1 in frames:
+		c.roundrect(x0, y0, x1 - x0, y1 - y0, 18, 12)
+	return frames
+
+
+def draw_chevron_vert(c, downward):
+	if downward:
+		c.fill_poly(((232.0, 236.0), (280.0, 236.0), (256.0, 276.0)))
+	else:
+		c.fill_poly(((232.0, 276.0), (280.0, 276.0), (256.0, 236.0)))
+
+
+def draw_desk_next(c):
+	#
+	# The window has landed on the desktop below.
+	#
+	frames = draw_desks(c)
+	draw_chevron_vert(c, True)
+	draw_moved_window(c, *frames[1])
+
+
+def draw_desk_prev(c):
+	#
+	# The window has landed on the desktop above.
+	#
+	frames = draw_desks(c)
+	draw_chevron_vert(c, False)
+	draw_moved_window(c, *frames[0])
+
+
 ############################################################ MAIN
 
 def main(argv):
@@ -262,6 +303,8 @@ def main(argv):
 		("rotate", draw_rotate),
 		("next", draw_next),
 		("prev", draw_prev),
+		("desk-next", draw_desk_next),
+		("desk-prev", draw_desk_prev),
 	)
 	for name, drawer in glyphs:
 		c = Canvas(512, 512)

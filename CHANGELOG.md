@@ -1,10 +1,15 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 11:18:37 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 15:47:21 -0800 Devin Teske $)
 
 # Changelog
 
 Newest first. Each section is a git tag; the bullets are the commits
 that landed in that tag (from the previous tag, or from the start of
 the repository for 1.0).
+
+## 11.1 (2026-11-03)
+
+- Tile glyphs for a move to the next desktop and the previous
+  desktop (`tile-desk-next`, `tile-desk-prev`).
 
 ## 11.0 (2026-11-03)
 

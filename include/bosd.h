@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BOSD_VERSION	"10.7"
+#define BOSD_VERSION	"11.1"
 
 #define BOSD_SPEC_MAX	1024
 #define BOSD_BADGE_MAX	32
