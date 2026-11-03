@@ -5,6 +5,8 @@
  * internal panel (eDP/LVDS/DSI), else the whole X screen.  "primary"
  * is that primary output and does not fall back to the panel.
  * "mouse" is the output under the pointer.
+ * "focus" is the output that holds the focused window.  When the
+ * pointer has the focus, that is the output under the pointer.
  * "all" is one copy per connected output; identical rectangles are
  * counted once, so a mirror is not painted twice.  Any other
  * selector is that output's name (DP-4, eDP-1, ...).  The daemon
@@ -47,6 +49,7 @@ enum {
 	SEL_ALL,
 	SEL_PRIMARY,
 	SEL_MOUSE,
+	SEL_FOCUS,
 	SEL_NAME
 };
 
@@ -191,6 +194,74 @@ output_at(const struct output_found *found, int nf, int x, int y)
 }
 
 static int
+overlap_area(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh)
+{
+	int x0, y0, x1, y1, w, h;
+
+	x0 = ax > bx ? ax : bx;
+	y0 = ay > by ? ay : by;
+	x1 = (ax + aw < bx + bw) ? ax + aw : bx + bw;
+	y1 = (ay + ah < by + bh) ? ay + ah : by + bh;
+	w = x1 - x0;
+	h = y1 - y0;
+	if (w <= 0 || h <= 0)
+		return (0);
+	return (w * h);
+}
+
+static int
+output_holding(const struct output_found *found, int nf,
+    int x, int y, int w, int h)
+{
+	int i, area, best, best_area;
+
+	best = -1;
+	best_area = 0;
+	for (i = 0; i < nf; i++) {
+		area = overlap_area(x, y, w, h, found[i].x, found[i].y,
+		    found[i].w, found[i].h);
+		if (area > best_area) {
+			best_area = area;
+			best = i;
+		}
+	}
+	return (best);
+}
+
+/*
+ * 0: the focused window's rectangle on the root is filled in.
+ * 1: focus follows the pointer.
+ * -1: there is no focused window.
+ */
+static int
+focus_rect(Window root, int *x, int *y, int *w, int *h)
+{
+	Window focus, child;
+	int revert, rx, ry;
+	XWindowAttributes attr;
+
+	focus = None;
+	XGetInputFocus(dpy, &focus, &revert);
+	if (focus == None)
+		return (-1);
+	if (focus == PointerRoot)
+		return (1);
+	if (XGetWindowAttributes(dpy, focus, &attr) == 0)
+		return (-1);
+	if (attr.map_state != IsViewable)
+		return (-1);
+	if (!XTranslateCoordinates(dpy, focus, root, 0, 0, &rx, &ry, &child))
+		return (-1);
+	*x = rx;
+	*y = ry;
+	*w = attr.width;
+	*h = attr.height;
+	if (*w <= 0 || *h <= 0)
+		return (-1);
+	return (0);
+}
+
+static int
 sel_kind(const char *sel)
 {
 	if (sel == NULL || sel[0] == '\0')
@@ -201,6 +272,8 @@ sel_kind(const char *sel)
 		return (SEL_PRIMARY);
 	if (strcmp(sel, "mouse") == 0)
 		return (SEL_MOUSE);
+	if (strcmp(sel, "focus") == 0)
+		return (SEL_FOCUS);
 	return (SEL_NAME);
 }
 
@@ -284,7 +357,7 @@ screen_use(int i)
  * not name a connected output.  sel NULL or "" is the primary,
  * else the built-in panel, else the whole X screen.  "primary"
  * is the primary output only.  "mouse" is the output under the
- * pointer.
+ * pointer.  "focus" is the output that holds the focused window.
  */
 int
 screen_prepare(const char *sel)
@@ -394,6 +467,35 @@ screen_prepare(const char *sel)
 			}
 			target_box(found[hit].name, found[hit].x,
 			    found[hit].y, found[hit].w, found[hit].h);
+		} else if (kind == SEL_FOCUS) {
+			Window root_ret, child;
+			int fx, fy, fw, fh, rx, ry, wx, wy, hit, rc;
+			unsigned int mask;
+
+			rc = focus_rect(root, &fx, &fy, &fw, &fh);
+			hit = -1;
+			if (rc == 0) {
+				hit = output_holding(found, nf, fx, fy, fw, fh);
+			} else if (rc == 1 && XQueryPointer(dpy, root,
+			    &root_ret, &child, &rx, &ry, &wx, &wy, &mask)) {
+				hit = output_at(found, nf, rx, ry);
+			}
+			if (hit < 0) {
+				XRRFreeScreenResources(res);
+				if (rc < 0)
+					warn_sel("focus", "no focused window");
+				else if (rc == 1)
+					warn_sel("focus",
+					    "pointer is not on a connected output");
+				else
+					warn_sel("focus",
+					    "focused window is not on a "
+					    "connected output");
+				targets_reset();
+				return (-1);
+			}
+			target_box(found[hit].name, found[hit].x,
+			    found[hit].y, found[hit].w, found[hit].h);
 		} else {
 			pick = -1;
 			for (i = 0; i < nf; i++) {
@@ -421,6 +523,9 @@ screen_prepare(const char *sel)
 	} else if (kind == SEL_MOUSE) {
 		warn_sel("mouse", "pointer is not on a connected output");
 		return (-1);
+	} else if (kind == SEL_FOCUS) {
+		warn_sel("focus", "no focused window");
+		return (-1);
 	}
 
 	if (ntargets == 0) {
@@ -435,6 +540,10 @@ screen_prepare(const char *sel)
 		if (kind == SEL_MOUSE) {
 			warn_sel("mouse",
 			    "pointer is not on a connected output");
+			return (-1);
+		}
+		if (kind == SEL_FOCUS) {
+			warn_sel("focus", "no focused window");
 			return (-1);
 		}
 		target_whole();

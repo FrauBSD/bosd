@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/README.md 2026-11-03 10:52:50 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/README.md 2026-11-03 10:53:55 -0800 Devin Teske $)
 
 # bosd
 
@@ -11,7 +11,8 @@ a checkmark), or small caption text (a screenshot's filename), or
 a gauge bar (the classic xosd tick look) at the panel bottom in a
 centered ARGB32 overlay on the primary or internal panel
 (`-S` names another output, `primary` for the primary, `mouse` for
-the output under the pointer, or `all` for every connected output). A warm
+the output under the pointer, `focus` for the output that holds
+the focused window, or `all` for every connected output). A warm
 daemon per channel keeps everything on screen and repaints in
 place, so rapid toggles never flash; the gauge and the artwork run
 independent timers and coexist. When a daemon is warm, a client

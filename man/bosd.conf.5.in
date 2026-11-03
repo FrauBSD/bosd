@@ -72,6 +72,10 @@ or the built-in panel when no primary is set.
 does not use that fallback.
 .Cm mouse
 is the output under the pointer.
+.Cm focus
+is the output that holds the focused window.
+When the pointer has the focus, that is the output under
+the pointer.
 .Pp
 .Nm bosd
 started with
@@ -120,13 +124,17 @@ or
 or
 .Cm primary ,
 or
-.Cm mouse .
+.Cm mouse ,
+or
+.Cm focus .
 Empty selects the primary, or the built-in panel when no
 primary is set.
 .Cm primary
 does not use that fallback.
 .Cm mouse
 is the output under the pointer.
+.Cm focus
+is the output that holds the focused window.
 See
 .Sx SCREEN .
 .It Sy alpha

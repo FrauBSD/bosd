@@ -42,8 +42,9 @@ extern "C" {
  * fill the fields that apply.  String fields are NUL-terminated.
  * Literal whitespace is kept.  Escapes match bosd(1): \xNN, \uNNNN,
  * \UNNNNNNNN, \\.  screen is a RandR output name, "all",
- * "primary", or "mouse"; empty means the daemon's default (-S, else
- * bosd.conf, else the primary, else the built-in panel).
+ * "primary", "mouse", or "focus"; empty means the daemon's
+ * default (-S, else bosd.conf, else the primary, else the
+ * built-in panel).
  */
 struct bosd_req {
 	double	 hold;		/* seconds; -1 until clear/replace */
@@ -67,7 +68,7 @@ struct bosd_req {
 	double	 alpha;		/* <0 native PNG; else multiply PNG alpha */
 	double	 outline_alpha;	/* multiplies outline alpha; 1 = opaque */
 	char	 font[BOSD_FONT_MAX];	/* -f fontconfig family; empty = default */
-	char	 screen[BOSD_SCREEN_MAX]; /* -S name, all, primary, mouse, or empty */
+	char	 screen[BOSD_SCREEN_MAX]; /* -S name, all, primary, mouse, focus */
 };
 
 /* Fill defaults: hold 2s, scale 1, native PNG alpha, outline on and
