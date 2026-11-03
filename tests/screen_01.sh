@@ -39,6 +39,13 @@ else
 	fi
 fi
 
+test_begin "screen word mouse"
+expect "Glyph on the output under the pointer"
+if ! "$BOSD" -D -S mouse "$png" 0.2 > /dev/null 2>&1; then
+	printf '%s\n' "bosd-test: -S mouse failed" >&2
+	exit 1
+fi
+
 test_begin "screen unknown output"
 expect "No glyph; bosd reports that the output is not connected"
 

@@ -575,6 +575,8 @@ instead of the primary
 .Cm primary
 is that primary output and does not use the built-in panel
 when no primary is set.
+.Cm mouse
+is the output under the pointer.
 .Ql Li all
 draws one copy on every connected output, each sized and centered
 on that output.

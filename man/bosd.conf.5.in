@@ -70,6 +70,8 @@ Empty, or leaving the name unset, means the primary output,
 or the built-in panel when no primary is set.
 .Cm primary
 does not use that fallback.
+.Cm mouse
+is the output under the pointer.
 .Pp
 .Nm bosd
 started with
@@ -116,11 +118,15 @@ Output name
 or
 .Cm all ,
 or
-.Cm primary .
+.Cm primary ,
+or
+.Cm mouse .
 Empty selects the primary, or the built-in panel when no
 primary is set.
 .Cm primary
 does not use that fallback.
+.Cm mouse
+is the output under the pointer.
 See
 .Sx SCREEN .
 .It Sy alpha

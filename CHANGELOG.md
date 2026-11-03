@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:52:02 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:52:50 -0800 Devin Teske $)
 
 # Changelog
 
@@ -10,6 +10,7 @@ the repository for 1.0).
 
 - `-S primary` is the primary output. It does not fall back to
   the built-in panel. An empty screen still does.
+- `-S mouse` is the output under the pointer.
 
 ## 10.9 (2026-11-01)
 

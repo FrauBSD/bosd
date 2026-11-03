@@ -4,6 +4,7 @@
  * An empty selector is the primary output, else the first connected
  * internal panel (eDP/LVDS/DSI), else the whole X screen.  "primary"
  * is that primary output and does not fall back to the panel.
+ * "mouse" is the output under the pointer.
  * "all" is one copy per connected output; identical rectangles are
  * counted once, so a mirror is not painted twice.  Any other
  * selector is that output's name (DP-4, eDP-1, ...).  The daemon
@@ -45,6 +46,7 @@ enum {
 	SEL_EMPTY = 0,
 	SEL_ALL,
 	SEL_PRIMARY,
+	SEL_MOUSE,
 	SEL_NAME
 };
 
@@ -174,7 +176,20 @@ target_box(const char *name, int x, int y, int w, int h)
 	target_add(slot);
 }
 
-/* 0 empty, 1 all, 2 the word primary, 3 an output name. */
+static int
+output_at(const struct output_found *found, int nf, int x, int y)
+{
+	int i;
+
+	for (i = 0; i < nf; i++) {
+		if (x >= found[i].x && y >= found[i].y &&
+		    x < found[i].x + found[i].w &&
+		    y < found[i].y + found[i].h)
+			return (i);
+	}
+	return (-1);
+}
+
 static int
 sel_kind(const char *sel)
 {
@@ -184,6 +199,8 @@ sel_kind(const char *sel)
 		return (SEL_ALL);
 	if (strcmp(sel, "primary") == 0)
 		return (SEL_PRIMARY);
+	if (strcmp(sel, "mouse") == 0)
+		return (SEL_MOUSE);
 	return (SEL_NAME);
 }
 
@@ -266,7 +283,8 @@ screen_use(int i)
  * Fill the target list.  Returns 0, or -1 when the selector does
  * not name a connected output.  sel NULL or "" is the primary,
  * else the built-in panel, else the whole X screen.  "primary"
- * is the primary output only.
+ * is the primary output only.  "mouse" is the output under the
+ * pointer.
  */
 int
 screen_prepare(const char *sel)
@@ -358,6 +376,24 @@ screen_prepare(const char *sel)
 				target_box(found[i].name, found[i].x,
 				    found[i].y, found[i].w, found[i].h);
 			}
+		} else if (kind == SEL_MOUSE) {
+			Window root_ret, child;
+			int rx, ry, wx, wy, hit;
+			unsigned int mask;
+
+			hit = -1;
+			if (XQueryPointer(dpy, root, &root_ret, &child,
+			    &rx, &ry, &wx, &wy, &mask))
+				hit = output_at(found, nf, rx, ry);
+			if (hit < 0) {
+				XRRFreeScreenResources(res);
+				warn_sel("mouse",
+				    "pointer is not on a connected output");
+				targets_reset();
+				return (-1);
+			}
+			target_box(found[hit].name, found[hit].x,
+			    found[hit].y, found[hit].w, found[hit].h);
 		} else {
 			pick = -1;
 			for (i = 0; i < nf; i++) {
@@ -382,6 +418,9 @@ screen_prepare(const char *sel)
 	} else if (kind == SEL_PRIMARY) {
 		warn_sel("primary", "no primary output");
 		return (-1);
+	} else if (kind == SEL_MOUSE) {
+		warn_sel("mouse", "pointer is not on a connected output");
+		return (-1);
 	}
 
 	if (ntargets == 0) {
@@ -391,6 +430,11 @@ screen_prepare(const char *sel)
 		}
 		if (kind == SEL_PRIMARY) {
 			warn_sel("primary", "no primary output");
+			return (-1);
+		}
+		if (kind == SEL_MOUSE) {
+			warn_sel("mouse",
+			    "pointer is not on a connected output");
 			return (-1);
 		}
 		target_whole();

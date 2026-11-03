@@ -1,4 +1,4 @@
-# $FrauBSD: bosd/examples/bosd.conf.in 2026-11-03 10:52:02 -0800 Devin Teske $
+# $FrauBSD: bosd/examples/bosd.conf.in 2026-11-03 10:52:50 -0800 Devin Teske $
 #
 # bosd display defaults.
 #
@@ -15,6 +15,7 @@
 
 # -S. Empty is the primary, or the built-in panel when no
 # primary is set. The word primary does not use that fallback.
+# The word mouse is the output under the pointer.
 # A show sent to a daemon without -S
 # keeps that daemon's screen (its -S, else this value at startup).
 # A local show (-D, or no daemon) uses this value directly.
