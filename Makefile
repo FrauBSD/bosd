@@ -8,7 +8,7 @@
 #
 # $Title: bosd - on-screen display engine $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/Makefile 2026-11-01 11:33:54 -0800 Devin Teske $
+# $FrauBSD: bosd/Makefile 2026-11-03 10:54:46 -0800 Devin Teske $
 #
 ############################################################ OPTIONS
 
@@ -92,7 +92,8 @@ EXAMPLE_PNGS=	examples/bsd.png \
 		examples/tile-top-left.png examples/tile-top-right.png \
 		examples/tile-bottom-left.png \
 		examples/tile-bottom-right.png \
-		examples/tile-insert.png examples/tile-rotate.png
+		examples/tile-insert.png examples/tile-rotate.png \
+		examples/tile-next.png examples/tile-prev.png
 
 ############################################################ TARGETS
 
@@ -214,7 +215,8 @@ examples/tile-on.png examples/tile-float.png \
 		examples/tile-top-left.png examples/tile-top-right.png \
 		examples/tile-bottom-left.png \
 		examples/tile-bottom-right.png \
-		examples/tile-insert.png examples/tile-rotate.png: \
+		examples/tile-insert.png examples/tile-rotate.png \
+		examples/tile-next.png examples/tile-prev.png: \
 		examples/tile.py tools/glyph.py
 	${PYTHON} examples/tile.py examples
 

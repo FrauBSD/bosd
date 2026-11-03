@@ -1,4 +1,4 @@
-[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:53:55 -0800 Devin Teske $)
+[//]: # ($FrauBSD: bosd/CHANGELOG.md 2026-11-03 10:54:46 -0800 Devin Teske $)
 
 # Changelog
 
@@ -14,6 +14,8 @@ the repository for 1.0).
 - `-S focus` is the output that holds the focused window.
   When the pointer has the focus, that is the output under
   the pointer.
+- Tile glyphs for a move to the next screen and the previous
+  screen (`tile-next`, `tile-prev`).
 
 ## 10.9 (2026-11-01)
 

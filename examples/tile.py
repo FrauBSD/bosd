@@ -9,7 +9,7 @@
 #
 # $Title: Make window tile-mode PNG glyphs $
 # $Copyright: 2026 Devin Teske. All rights reserved. $
-# $FrauBSD: bosd/examples/tile.py 2026-10-31 20:24:24 -0700 Devin Teske $
+# $FrauBSD: bosd/examples/tile.py 2026-11-03 10:54:46 -0800 Devin Teske $
 #
 ############################################################ DOCSTRING
 
@@ -29,6 +29,8 @@
   tile-bottom-right.png   bottom-right quarter
   tile-insert.png         grid, window joined at the top
   tile-rotate.png         grid, window stepped back
+  tile-next.png           window moved to the next screen
+  tile-prev.png           window moved to the previous screen
 """
 
 ############################################################ INCLUDES
@@ -192,6 +194,53 @@ def draw_rotate(c):
 	fill_cell(c, 0, 1, 2, 2)
 
 
+def draw_monitors(c):
+	#
+	# Two outputs, left then right. The gap is where the chevron sits.
+	#
+	frames = (
+		(40.0, 124.0, 220.0, 388.0),
+		(292.0, 124.0, 472.0, 388.0),
+	)
+	for x0, y0, x1, y1 in frames:
+		c.roundrect(x0, y0, x1 - x0, y1 - y0, 18, 12)
+	return frames
+
+
+def draw_moved_window(c, x0, y0, x1, y1):
+	ix0 = x0 + 28.0
+	iy0 = y0 + 48.0
+	ix1 = x1 - 28.0
+	iy1 = y1 - 36.0
+	c.roundrect(ix0, iy0, ix1 - ix0, iy1 - iy0, 16, 11)
+	c.fill_round_rect(ix0 + 12, iy0 + 12, ix1 - 12, iy0 + 46, 6)
+
+
+def draw_chevron(c, to_right):
+	if to_right:
+		c.fill_poly(((238.0, 232.0), (238.0, 280.0), (274.0, 256.0)))
+	else:
+		c.fill_poly(((274.0, 232.0), (274.0, 280.0), (238.0, 256.0)))
+
+
+def draw_next(c):
+	#
+	# The window has landed on the screen to the right.
+	#
+	frames = draw_monitors(c)
+	draw_chevron(c, True)
+	draw_moved_window(c, *frames[1])
+
+
+def draw_prev(c):
+	#
+	# The window has landed on the screen to the left.
+	#
+	frames = draw_monitors(c)
+	draw_chevron(c, False)
+	draw_moved_window(c, *frames[0])
+
+
 ############################################################ MAIN
 
 def main(argv):
@@ -211,6 +260,8 @@ def main(argv):
 		("bottom-right", draw_bottom_right),
 		("insert", draw_insert),
 		("rotate", draw_rotate),
+		("next", draw_next),
+		("prev", draw_prev),
 	)
 	for name, drawer in glyphs:
 		c = Canvas(512, 512)
